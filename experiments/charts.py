@@ -42,8 +42,10 @@ def win_rates():
     ax.barh(y, red, color=RED, label="Red wins")
     ax.barh(y, blue, left=red, color=BLUE, label="Blue wins")
     for i, (r, b) in enumerate(zip(red, blue)):
-        ax.text(r / 2, i, f"{r:.0f}%", va="center", ha="center", color="white", fontsize=9)
-        ax.text(r + b / 2, i, f"{b:.0f}%", va="center", ha="center", color="white", fontsize=9)
+        if r >= 5:
+            ax.text(r / 2, i, f"{r:.0f}%", va="center", ha="center", color="white", fontsize=9)
+        if b >= 5:
+            ax.text(r + b / 2, i, f"{b:.0f}%", va="center", ha="center", color="white", fontsize=9)
     ax.set_yticks(list(y))
     ax.set_yticklabels(labels, fontsize=9)
     ax.invert_yaxis()

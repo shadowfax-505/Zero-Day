@@ -1,7 +1,7 @@
 pairing,red,blue,matches,red_win_rate,blue_win_rate,blue_by_removal,avg_rounds_red_win,avg_rounds_blue_win,avg_detection_round
-Red AI vs Blue AI,ai,ai,48,0.3333333333333333,0.6666666666666666,0.0,29.8125,40,3.1875
-Red AI vs random Blue,ai,random,48,0.9791666666666666,0.020833333333333332,0.0,18.5531914893617,40,
-Random Red vs Blue AI,random,ai,48,0.0,1.0,0.0,,40,2.9375
-Ablation: Red A* only (no MCTS),astar,ai,48,0.6458333333333334,0.3541666666666667,0.0,24.516129032258064,40,3.6666666666666665
-Ablation: Blue without particle filter,ai,nofilter,48,0.6041666666666666,0.3958333333333333,0.0,23.96551724137931,40,3.9791666666666665
-Ablation: Blue before GA tuning,ai,untuned,48,0.3125,0.6875,0.0,28.466666666666665,40,3.1875
+Red AI vs Blue AI,ai,ai,100,0.56,0.44,0.0,27.839285714285715,40,2.83
+Red AI vs random Blue,ai,random,100,1.0,0.0,0.0,12.25,,
+Random Red vs Blue AI,random,ai,100,0.0,1.0,0.0,,40,3.04040404040404
+Ablation: Red A* only (no MCTS),astar,ai,100,0.6,0.4,0.0,28.416666666666668,40,2.83
+Ablation: Blue without particle filter,ai,nofilter,100,0.88,0.12,0.0,23.443181818181817,40,3.27
+Ablation: Blue before GA tuning,ai,untuned,100,0.57,0.43,0.0,27.31578947368421,40,3.03

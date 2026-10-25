@@ -137,7 +137,29 @@ python -m experiments.charts                            # win-rate chart and GA 
 python -m tuning.ga --pop 30 --gens 40 --matches 30     # the full GA from the outline (hours)
 ```
 
-RESULTS_TABLE
+100 matches per pairing on the same fixed seeds (maps 1 to 100), full search budgets:
+
+| Pairing | Red wins | Blue wins | Avg rounds (Red win) | Blue first locates Red |
+| --- | --- | --- | --- | --- |
+| **Red AI vs Blue AI** | **56%** | **44%** | 27.8 | round 2.8 |
+| Red AI vs random Blue | 100% | 0% | 12.2 | - |
+| Random Red vs Blue AI | 0% | 100% | - | round 3.0 |
+| Ablation: Red with A\* only (no MCTS) | 60% | 40% | 28.4 | round 2.8 |
+| Ablation: Blue without the particle filter | 88% | 12% | 23.4 | round 3.3 |
+| Ablation: Blue before GA tuning | 57% | 43% | 27.3 | round 3.0 |
+
+What this shows:
+
+- The main match is balanced (56 / 44), inside the 40 to 60% target from the outline.
+- Both AIs beat a random opponent in every match.
+- The particle filter is Blue's most important part: without it Blue wins only 12% instead of 44%.
+- Against the tuned Blue, Red's IS-MCTS layer is a tie with plain A\* (56% vs 60% is within the noise of
+  100 matches). Red uses MCTS to override A\*'s step only when the sampled hidden states say it is clearly
+  better, which happens in only a few percent of rounds. In earlier runs against the untuned Blue, MCTS
+  gave Red a 6-point edge (73% vs 67%).
+- The GA run included here is a short one (16 individuals, 10 generations, 16 matches each, against a
+  faster Red). It gives Blue only a small gain. The full outline settings (`--pop 30 --gens 40
+  --matches 30`) take several hours and are the obvious next step.
 
 ![Win rates](experiments/results/win_rates.png)
 

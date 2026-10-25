@@ -8,7 +8,7 @@ from agents.red.ismcts import ISMCTS
 from agents.red.opponent_model import OpponentModel
 from engine import config as C
 
-OVERRIDE_MARGIN = 0.03
+OVERRIDE_MARGIN = 0.05
 
 
 class RedAI(Agent):
