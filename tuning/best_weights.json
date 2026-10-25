@@ -1,0 +1,21 @@
+{
+  "fitness": 0.9056,
+  "pop": 16,
+  "generations": 10,
+  "matches_per_eval": 16,
+  "weights": {
+    "path": 2.8727,
+    "detect": 1.3202,
+    "catch": 4.1922,
+    "value": 1.0898,
+    "decoy": 0.4836,
+    "patch_pref": 1.1544,
+    "restore_pref": 1.0604,
+    "watch": 47.7482,
+    "act": 64.3611,
+    "alert_mid": 0.45,
+    "conf_mid": 0.5629,
+    "stay": 0.5576,
+    "toward_db": 2.1241
+  }
+}

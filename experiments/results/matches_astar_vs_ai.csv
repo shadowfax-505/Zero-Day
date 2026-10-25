@@ -1,0 +1,49 @@
+seed,winner,reason,rounds,located,red,blue
+1,blue,Blue held out for 40 rounds,40,4,Red A* only,Blue AI
+2,red,Red claimed the database,19,2,Red A* only,Blue AI
+3,red,Red claimed the database,37,2,Red A* only,Blue AI
+4,red,Red claimed the database,25,2,Red A* only,Blue AI
+5,red,Red claimed the database,37,2,Red A* only,Blue AI
+6,red,Red claimed the database,14,2,Red A* only,Blue AI
+7,red,Red claimed the database,17,8,Red A* only,Blue AI
+8,red,Red claimed the database,27,7,Red A* only,Blue AI
+9,red,Red claimed the database,36,11,Red A* only,Blue AI
+10,blue,Blue held out for 40 rounds,40,3,Red A* only,Blue AI
+11,blue,Blue held out for 40 rounds,40,5,Red A* only,Blue AI
+12,red,Red claimed the database,21,11,Red A* only,Blue AI
+13,red,Red claimed the database,31,2,Red A* only,Blue AI
+14,blue,Blue held out for 40 rounds,40,10,Red A* only,Blue AI
+15,red,Red claimed the database,27,2,Red A* only,Blue AI
+16,red,Red claimed the database,25,2,Red A* only,Blue AI
+17,red,Red claimed the database,12,5,Red A* only,Blue AI
+18,red,Red claimed the database,22,2,Red A* only,Blue AI
+19,blue,Blue held out for 40 rounds,40,6,Red A* only,Blue AI
+20,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+21,red,Red claimed the database,28,2,Red A* only,Blue AI
+22,red,Red claimed the database,17,2,Red A* only,Blue AI
+23,red,Red claimed the database,22,2,Red A* only,Blue AI
+24,blue,Blue held out for 40 rounds,40,3,Red A* only,Blue AI
+25,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+26,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+27,red,Red claimed the database,8,,Red A* only,Blue AI
+28,red,Red claimed the database,32,2,Red A* only,Blue AI
+29,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+30,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+31,red,Red claimed the database,38,2,Red A* only,Blue AI
+32,red,Red claimed the database,33,4,Red A* only,Blue AI
+33,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+34,red,Red claimed the database,31,3,Red A* only,Blue AI
+35,red,Red claimed the database,14,3,Red A* only,Blue AI
+36,red,Red claimed the database,26,4,Red A* only,Blue AI
+37,red,Red claimed the database,40,2,Red A* only,Blue AI
+38,red,Red claimed the database,25,6,Red A* only,Blue AI
+39,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
+40,red,Red claimed the database,11,2,Red A* only,Blue AI
+41,red,Red claimed the database,30,2,Red A* only,Blue AI
+42,red,Red claimed the database,40,3,Red A* only,Blue AI
+43,red,Red claimed the database,23,2,Red A* only,Blue AI
+44,blue,Blue held out for 40 rounds,40,5,Red A* only,Blue AI
+45,blue,Blue held out for 40 rounds,40,10,Red A* only,Blue AI
+46,red,Red claimed the database,18,2,Red A* only,Blue AI
+47,red,Red claimed the database,14,2,Red A* only,Blue AI
+48,blue,Blue held out for 40 rounds,40,2,Red A* only,Blue AI
