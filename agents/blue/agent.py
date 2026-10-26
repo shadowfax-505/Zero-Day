@@ -1,4 +1,4 @@
-"""Blue AI: particle filter -> fuzzy triage -> Stackelberg minimax, tuned by a GA."""
+"""Blue AI: particle filter -> fuzzy triage -> minimax with alpha-beta pruning, tuned by a GA."""
 
 import json
 import os

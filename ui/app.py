@@ -413,7 +413,7 @@ class App:
         fx.text(s, "ZERO DAY", (T.W // 2, 300), 118, T.WHITE, "black", anchor="center")
         fx.text(s, "An intruder AI and a defender AI on a network neither can fully see.", (T.W // 2, 385), 19,
                 T.TEXT, "medium", anchor="center")
-        fx.text(s, "A* · Information-Set MCTS · opponent model   vs   particle filter · fuzzy logic · Stackelberg · GA",
+        fx.text(s, "A* · Information-Set MCTS · opponent model   vs   particle filter · fuzzy logic · minimax + alpha-beta · GA",
                 (T.W // 2, 418), 14, T.MUTED, "medium", anchor="center")
         for i, ((label, _), r) in enumerate(zip(self._menu_items(), self._menu_rects())):
             sel = i == self.menu_sel

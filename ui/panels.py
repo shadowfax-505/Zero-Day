@@ -189,7 +189,7 @@ def draw_red_panel(surf, rect, match, view, human=False, human_help=None):
 def draw_blue_panel(surf, rect, match, view, human=False, human_help=None):
     g, net, d = match.game, match.net, match.blue_debug
     fx.rounded_panel(surf, rect)
-    _header(surf, rect, "BLUE · DEFENDER", "particle filter · fuzzy · Stackelberg" if not human else "You are playing Blue",
+    _header(surf, rect, "BLUE · DEFENDER", "particle filter · fuzzy · minimax" if not human else "You are playing Blue",
             T.BLUE)
     if view == "red":
         _hidden(surf, rect, T.BLUE, "Red")
@@ -239,7 +239,7 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None):
         y += 17
     y += 10
 
-    fx.spaced(surf, "STACKELBERG DEFENCE", (x, y), 10, T.MUTED, "bold", 2)
+    fx.spaced(surf, "MINIMAX + ALPHA-BETA", (x, y), 10, T.MUTED, "bold", 2)
     y += 16
     fx.text(surf, f"{d.get('options', 0)} plans vs Red's best replies · {d.get('evaluated', 0)} evals",
             (x, y), 11, T.DIM, "medium")
