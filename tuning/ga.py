@@ -75,13 +75,28 @@ def mutate(rng, g, rate=0.2, scale=0.12):
     return clip(out)
 
 
-def run(pop_size=30, gens=40, matches=30, seed=1, workers=None):
+STATE = os.path.join(HERE, "ga_state.json")
+
+
+def run(pop_size=30, gens=40, matches=30, seed=1, workers=None, resume=False, seed_files=()):
     rng = random.Random(seed)
-    pop = [[DEFAULT_WEIGHTS[k] for k in NAMES]] + [random_genome(rng) for _ in range(pop_size - 1)]
-    history = []
-    best_overall = (-1.0, None)
+    if resume and os.path.exists(STATE):
+        with open(STATE) as f:
+            st = json.load(f)
+        pop, history, start = st["pop"], st["history"], st["next_gen"]
+        best_overall = (st["best_fit"], st["best"])
+        rng.setstate(_tuplify(st["rng"]))
+        print(f"resuming at generation {start}", flush=True)
+    else:
+        pop = [[DEFAULT_WEIGHTS[k] for k in NAMES]]
+        for path in seed_files:               # warm start from earlier runs' best weights
+            with open(path) as f:
+                w = json.load(f)["weights"]
+            pop.append(clip([w.get(k, DEFAULT_WEIGHTS[k]) for k in NAMES]))
+        pop += [random_genome(rng) for _ in range(pop_size - len(pop))]
+        history, start, best_overall = [], 0, (-1.0, None)
     with Pool(workers or os.cpu_count()) as pool:
-        for gen in range(gens):
+        for gen in range(start, gens):
             t = time.time()
             seeds = [rng.randrange(1, 10 ** 6) for _ in range(matches)]
             fit = pool.map(_eval, [(g, seeds) for g in pop])
@@ -97,17 +112,37 @@ def run(pop_size=30, gens=40, matches=30, seed=1, workers=None):
                 a, b = tournament(rng, pop, fit), tournament(rng, pop, fit)
                 children.append(mutate(rng, crossover(rng, a, b)))
             pop = elite + children
+            # checkpoint every generation so a stopped run can continue with --resume
+            _save(best_overall, history, pop_size, gens, matches)
+            with open(STATE, "w") as f:
+                json.dump({"pop": pop, "history": history, "next_gen": gen + 1, "best_fit": best_overall[0],
+                           "best": best_overall[1], "rng": rng.getstate()}, f)
 
-    weights = to_weights(best_overall[1])
+        # a single 30-match score is noisy, so re-test the finalists on a larger common set of maps
+        finalists = [best_overall[1]] + [g for g in pop[:2] if g != best_overall[1]]
+        seeds = [rng.randrange(1, 10 ** 6) for _ in range(2 * matches)]
+        scores = pool.map(_eval, [(g, seeds) for g in finalists])
+    k = max(range(len(finalists)), key=lambda i: scores[i])
+    print("finalists:", [round(x, 3) for x in scores], flush=True)
+    best_overall = (scores[k], finalists[k])
+    _save(best_overall, history, pop_size, gens, matches)
+    _plot(history)
+    return to_weights(best_overall[1]), history
+
+
+def _tuplify(x):
+    return tuple(_tuplify(v) for v in x) if isinstance(x, list) else x
+
+
+def _save(best_overall, history, pop_size, gens, matches):
     with open(os.path.join(HERE, "best_weights.json"), "w") as f:
-        json.dump({"fitness": round(best_overall[0], 4), "pop": pop_size, "generations": gens,
-                   "matches_per_eval": matches, "weights": weights}, f, indent=2)
+        json.dump({"fitness": round(best_overall[0], 4), "pop": pop_size, "generations": len(history),
+                   "planned_generations": gens, "matches_per_eval": matches,
+                   "weights": to_weights(best_overall[1])}, f, indent=2)
     with open(os.path.join(HERE, "fitness.csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["generation", "best", "mean"])
         w.writeheader()
         w.writerows(history)
-    _plot(history)
-    return weights, history
 
 
 def _plot(history):
@@ -136,8 +171,10 @@ def main():
     ap.add_argument("--gens", type=int, default=40)
     ap.add_argument("--matches", type=int, default=30)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--resume", action="store_true", help="continue a stopped run from tuning/ga_state.json")
+    ap.add_argument("--seed-from", nargs="*", default=[], help="weights JSON files to put in the first population")
     a = ap.parse_args()
-    run(a.pop, a.gens, a.matches, a.seed)
+    run(a.pop, a.gens, a.matches, a.seed, resume=a.resume, seed_files=a.seed_from)
 
 
 if __name__ == "__main__":

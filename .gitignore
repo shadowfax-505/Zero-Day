@@ -4,3 +4,4 @@ __pycache__/
 venv/
 screenshots/
 .pytest_cache/
+tuning/ga_state.json
