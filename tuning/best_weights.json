@@ -1,21 +1,23 @@
 {
-  "fitness": 0.9056,
-  "pop": 16,
-  "generations": 10,
-  "matches_per_eval": 16,
+  "fitness": 0.641,
+  "pop": 30,
+  "generations": 41,
+  "planned_generations": 41,
+  "matches_per_eval": 30,
   "weights": {
-    "path": 2.8727,
-    "detect": 1.3202,
-    "catch": 4.1922,
-    "value": 1.0898,
-    "decoy": 0.4836,
-    "patch_pref": 1.1544,
-    "restore_pref": 1.0604,
-    "watch": 47.7482,
-    "act": 64.3611,
-    "alert_mid": 0.45,
-    "conf_mid": 0.5629,
-    "stay": 0.5576,
-    "toward_db": 2.1241
-  }
+    "path": 2.1026,
+    "detect": 1.8984,
+    "catch": 4.0161,
+    "value": 1.6562,
+    "decoy": 0.1131,
+    "patch_pref": 1.7105,
+    "restore_pref": 2.0,
+    "watch": 22.4539,
+    "act": 72.8645,
+    "alert_mid": 0.6148,
+    "conf_mid": 0.2965,
+    "stay": 0.5978,
+    "toward_db": 2.1613
+  },
+  "note": "run 1: generations 0-12 (stopped by a machine restart); run 2: generations 13-40, warm-started from run 1's best. Fitness is re-tested on 60 maps."
 }
