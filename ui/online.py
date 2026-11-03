@@ -15,8 +15,30 @@ import pygame
 
 from net.peer import DEFAULT_PORT, Beacon, Peer, Scanner, local_ip
 from net.session import Session
-from ui import fx
-from ui import theme as T
+from ui import theme as T     # rebound to the active skin's theme in Lobby.draw()
+
+fx = None                     # rebound to an _Ink for the active skin in Lobby.draw()
+
+class _Ink:
+    """The drawing calls the lobby needs, on top of either skin's fx module."""
+
+    def __init__(self, sk):
+        self.f, self.paper = sk.fx, sk.name == "paper"
+
+    def text(self, surf, s, pos, size=14, color=None, weight="regular", mono=False, anchor="topleft", display=False):
+        if self.paper:
+            return self.f.text(surf, s, pos, size, color, weight, mono=mono, anchor=anchor, display=display)
+        if display and weight == "bold":
+            weight = "black"
+        return self.f.text(surf, s, pos, size, color, weight, mono=mono, anchor=anchor)
+
+    def spaced(self, surf, s, pos, size, color, weight="semibold", spacing=2, anchor="topleft"):
+        return self.f.spaced(surf, s, pos, size, color, weight, spacing, anchor)
+
+    @staticmethod
+    def hrule(surf, x0, x1, y, color=None, width=1):
+        pygame.draw.line(surf, color or T.RULE, (x0, y), (x1, y), width)
+
 
 PREFS = os.path.join(os.path.expanduser("~"), ".zero-day-online.json")
 
@@ -51,7 +73,7 @@ class Lobby:
         self.sel = 3
         self.state = "setup"         # setup | hosting | joining
         self.status = ""
-        self.status_col = T.INK_2
+        self.status_col = "muted"
         self.session = None
         self.peer = None
         self.beacon = None
@@ -107,7 +129,7 @@ class Lobby:
         self._prefs()
         self.state = "joining"
         self.status = f"Connecting to {ip}:{port}..."
-        self.status_col = T.INK_2
+        self.status_col = "muted"
         self._join_result = None
 
         def work():
@@ -119,7 +141,7 @@ class Lobby:
         threading.Thread(target=work, daemon=True).start()
 
     def _error(self, msg):
-        self.status, self.status_col = msg, T.RED
+        self.status, self.status_col = msg, "red"
 
     def update(self):
         """Returns a ready Session once a match can begin."""
@@ -236,7 +258,9 @@ class Lobby:
             rects.append(pygame.Rect(860, 300 + j * 56, 630, 48))
         return rects
 
-    def draw(self, s, t):
+    def draw(self, s, t, sk):
+        global T, fx
+        T, fx = sk.T, _Ink(sk)
         x0 = self.X0
         pygame.draw.rect(s, T.RED, (x0, 128, 14, 34))
         pygame.draw.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
@@ -304,7 +328,8 @@ class Lobby:
             fx.hrule(s, r.x, r.right, r.bottom + 4, T.RULE)
 
         if self.status:
-            fx.text(s, self.status, (self.X0, 300 + len(self.ROWS) * 56 + 18), 15, self.status_col, "regular")
+            col = T.RED if self.status_col == "red" else T.INK_2
+            fx.text(s, self.status, (self.X0, 300 + len(self.ROWS) * 56 + 18), 15, col, "regular")
 
     def _row_text(self, row, sel, caret):
         if row == "name":
