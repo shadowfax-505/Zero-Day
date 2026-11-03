@@ -79,19 +79,20 @@ def _row(surf, x, y, label, value, vcol=T.TEXT, w=300):
     fx.text(surf, value, (x + w, y), 13, vcol, "semibold", anchor="topright")
 
 
-def _hidden(surf, rect, color, who):
+def _hidden(surf, rect, color, who, can_switch=True):
     fx.text(surf, f"Hidden in {who}'s view", (rect.centerx, rect.centery - 10), 15, T.scale(color, 0.8), "semibold",
             anchor="center")
-    fx.text(surf, "Press V to switch view", (rect.centerx, rect.centery + 14), 12, T.DIM, "medium", anchor="center")
+    fx.text(surf, "Press V to switch view" if can_switch else "Hidden by the fog of war",
+            (rect.centerx, rect.centery + 14), 12, T.DIM, "medium", anchor="center")
 
 
-def draw_red_panel(surf, rect, match, view, human=False, human_help=None):
+def draw_red_panel(surf, rect, match, view, human=False, human_help=None, subtitle=None, can_switch=True):
     g, net, d = match.game, match.net, match.red_debug
     fx.rounded_panel(surf, rect)
-    _header(surf, rect, "RED · INTRUDER", "A* route · IS-MCTS · opponent model" if not human else "You are playing Red",
-            T.RED)
+    _header(surf, rect, "RED · INTRUDER",
+            subtitle or ("A* route · IS-MCTS · opponent model" if not human else "You are playing Red"), T.RED)
     if view == "blue":
-        _hidden(surf, rect, T.RED, "Blue")
+        _hidden(surf, rect, T.RED, "Blue", can_switch)
         return
     x, y, w = rect.x + 20, rect.y + 66, rect.w - 40
     _row(surf, x, y, "Target", "Database", T.GOLD, w)
@@ -186,13 +187,13 @@ def draw_red_panel(surf, rect, match, view, human=False, human_help=None):
                 (x, y), 11, T.AMBER, "medium")
 
 
-def draw_blue_panel(surf, rect, match, view, human=False, human_help=None):
+def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subtitle=None, can_switch=True):
     g, net, d = match.game, match.net, match.blue_debug
     fx.rounded_panel(surf, rect)
-    _header(surf, rect, "BLUE · DEFENDER", "particle filter · fuzzy · minimax" if not human else "You are playing Blue",
-            T.BLUE)
+    _header(surf, rect, "BLUE · DEFENDER",
+            subtitle or ("particle filter · fuzzy · minimax" if not human else "You are playing Blue"), T.BLUE)
     if view == "red":
-        _hidden(surf, rect, T.BLUE, "Red")
+        _hidden(surf, rect, T.BLUE, "Red", can_switch)
         return
     x, y, w = rect.x + 20, rect.y + 66, rect.w - 40
     if human:
