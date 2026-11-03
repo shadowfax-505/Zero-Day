@@ -23,6 +23,7 @@ from ui.panels import draw_top, draw_red_panel, draw_blue_panel, draw_bottom, ac
 
 SPEEDS = [0.5, 1, 2, 4]
 TOOLS = ["monitor", "patch", "decoy", "isolate", "restore"]
+MENU_MAP = pygame.Rect(720, 128, 790, 560)
 
 
 class App:
@@ -41,7 +42,7 @@ class App:
         if record:
             os.makedirs(record, exist_ok=True)
         self.background = self._make_background()
-        self.menu_board = Board(generate(self.seed))
+        self.menu_board = Board(generate(self.seed), MENU_MAP)
         self.menu_sel = 0
         self.effects = []
         self.state = "menu"
@@ -51,20 +52,13 @@ class App:
 
     # -- setup -------------------------------------------------------------------
     def _make_background(self):
+        """Plain paper with a faint print grain."""
         bg = pygame.Surface((T.W, T.H))
-        for y in range(T.H):
-            k = y / T.H
-            pygame.draw.line(bg, T.mix(T.BG2, T.BG, k), (0, y), (T.W, y))
-        for x in range(0, T.W, 40):
-            pygame.draw.line(bg, T.GRID, (x, 0), (x, T.H))
-        for y in range(0, T.H, 40):
-            pygame.draw.line(bg, T.GRID, (0, y), (T.W, y))
-        vign = pygame.Surface((T.W, T.H), pygame.SRCALPHA)
-        for i in range(60):
-            a = int(3 * i)
-            pygame.draw.rect(vign, (0, 0, 0, min(255, a)), (i * 6 - 360, i * 4 - 240, T.W + 720 - i * 12, T.H + 480 - i * 8),
-                             8)
-        bg.blit(vign, (0, 0))
+        bg.fill(T.PAPER)
+        rng = random.Random(7)
+        for _ in range(9000):
+            x, y = rng.randrange(T.W), rng.randrange(T.H)
+            bg.set_at((x, y), T.mix(T.PAPER, T.INK_3, rng.uniform(0.08, 0.22)))
         return bg
 
     def start_match(self, mode, same_map=False):
@@ -139,10 +133,10 @@ class App:
         for kind, t in rec.blue_actions:
             if kind == "isolate":
                 self._fx(fx.Ripple(P[t], T.BLUE, 70, 0.9, 3), ("full", "blue", "red"))
-                self._fx(fx.Burst(P[t], T.BLUE_SOFT, 18, 90))
+                self._fx(fx.Burst(P[t], T.BLUE, 18, 120))
             elif kind == "patch":
-                self._fx(fx.Ripple(P[t], T.CYAN, 34, 0.8, 2), ("full", "blue"))
-                self._fx(fx.FloatText(P[t], "PATCHED", T.CYAN, 11), ("full", "blue"))
+                self._fx(fx.Ripple(P[t], T.BLUE, 34, 0.8, 2), ("full", "blue"))
+                self._fx(fx.FloatText(P[t], "PATCHED", T.BLUE, 11), ("full", "blue"))
             elif kind == "decoy":
                 self._fx(fx.Ripple(P[t], T.AMBER, 40, 0.9, 2), ("full", "blue"))
             elif kind == "restore":
@@ -157,7 +151,7 @@ class App:
             if ok:
                 self._fx(fx.Burst(P[target], col, 30, 160), ("red", "full"))
             else:
-                self._fx(fx.FloatText(P[target], "BLOCKED" if res == "blocked" else "FAILED", T.MUTED, 11),
+                self._fx(fx.FloatText(P[target], "BLOCKED" if res == "blocked" else "FAILED", T.INK_2, 11),
                          ("red", "full"))
         elif a[0] == "advance" and res == "advanced":
             self._fx(fx.Beam(P[old_pos], P[target], T.RED_SOFT, 0.5, True), ("red", "full"))
@@ -167,7 +161,7 @@ class App:
         for u, s, real in rec.alerts:
             self._fx(fx.Ripple(P[u], T.AMBER, 30 + 40 * s, 1.3, 3 if s > 0.5 else 2, dashed=not real),
                      ("blue",) if True else ())
-            self._fx(fx.Ripple(P[u], T.AMBER if real else T.DIM, 30 + 40 * s, 1.3, 2, dashed=not real), ("full",))
+            self._fx(fx.Ripple(P[u], T.AMBER if real else T.INK_3, 30 + 40 * s, 1.3, 2, dashed=not real), ("full",))
         if rec.alerts:
             strongest = rec.alerts[0]
             self._fx(fx.FloatText(P[strongest[0]], "ALERT", T.AMBER, 11), ("blue", "full"))
@@ -201,14 +195,14 @@ class App:
         col = T.TEXT
         for ev in rec.events:
             if "decoy" in ev or "cut Red off" in ev or "restored" in ev:
-                col = T.BLUE_SOFT
+                col = T.BLUE
             if "claimed" in ev:
                 col = T.GOLD
         self.log.append((rec.round, col, line))
         for ev in rec.events:
             if "captured" in ev or (self.view == "blue" and "unlocked" in ev):
                 continue
-            self.log.append((rec.round, T.MUTED, "   " + ev))
+            self.log.append((rec.round, T.INK_2, "   " + ev))
 
     # -- human input -------------------------------------------------------------------
     def _human_red_targets(self):
@@ -231,7 +225,7 @@ class App:
         target = net.zone[node] if tool == "monitor" else node
         cost = C.action_cost(tool, target, net.gateway)
         if cost > self._human_blue_ap() or not g.blue_can(tool, target):
-            self._fx(fx.FloatText(self.board.pts[node], "NOT ALLOWED", T.MUTED, 11))
+            self._fx(fx.FloatText(self.board.pts[node], "NOT ALLOWED", T.INK_2, 11))
             return
         if (tool, target) in self.human_blue_acts:
             return
@@ -317,13 +311,13 @@ class App:
                 self.menu_sel = (self.menu_sel + 1) % len(items)
             elif ev.key == pygame.K_LEFT:
                 self.seed = max(1, self.seed - 1)
-                self.menu_board = Board(generate(self.seed))
+                self.menu_board = Board(generate(self.seed), MENU_MAP)
             elif ev.key == pygame.K_RIGHT:
                 self.seed += 1
-                self.menu_board = Board(generate(self.seed))
+                self.menu_board = Board(generate(self.seed), MENU_MAP)
             elif ev.key == pygame.K_r:
                 self.seed = random.randrange(1, 100000)
-                self.menu_board = Board(generate(self.seed))
+                self.menu_board = Board(generate(self.seed), MENU_MAP)
             elif ev.key in (pygame.K_RETURN, pygame.K_SPACE):
                 return self._menu_pick(items[self.menu_sel][1])
             elif ev.key == pygame.K_ESCAPE:
@@ -345,7 +339,7 @@ class App:
         return True
 
     def _menu_rects(self):
-        return [pygame.Rect(T.W // 2 - 170, 470 + i * 62, 340, 50) for i in range(len(self._menu_items()))]
+        return [pygame.Rect(110, 570 + i * 52, 520, 46) for i in range(len(self._menu_items()))]
 
     def _screenshot(self):
         os.makedirs("screenshots", exist_ok=True)
@@ -395,38 +389,55 @@ class App:
         pygame.display.flip()
 
     def _draw_menu(self, s):
-        b = self.menu_board
-        layer = pygame.Surface((T.W, T.H))
-        layer.fill((0, 0, 0))
-        b.draw(layer, _MenuGame(b.net), "full", self.t)
-        layer.set_alpha(70)
-        s.blit(layer, (0, 0))
-        veil = pygame.Surface((T.W, T.H), pygame.SRCALPHA)
-        pygame.draw.rect(veil, (5, 9, 22, 170), (T.W // 2 - 420, 150, 840, 660), border_radius=30)
-        s.blit(veil, (0, 0))
-        fx.blit_glow(s, (T.W // 2 - 120, 270), 220, T.RED, 0.35)
-        fx.blit_glow(s, (T.W // 2 + 140, 270), 220, T.BLUE, 0.35)
-        fx.spaced(s, "AI LAB FINAL PROJECT  ·  KUET CSE", (T.W // 2, 190), 13, T.MUTED, "semibold", 4, anchor="midtop")
-        glitch = int(3 * math.sin(self.t * 13)) if int(self.t * 2) % 7 == 0 else 0
-        fx.text(s, "ZERO DAY", (T.W // 2 + glitch + 3, 300), 118, T.scale(T.RED, 0.7), "black", anchor="center")
-        fx.text(s, "ZERO DAY", (T.W // 2 - glitch - 3, 300), 118, T.scale(T.BLUE, 0.7), "black", anchor="center")
-        fx.text(s, "ZERO DAY", (T.W // 2, 300), 118, T.WHITE, "black", anchor="center")
-        fx.text(s, "An intruder AI and a defender AI on a network neither can fully see.", (T.W // 2, 385), 19,
-                T.TEXT, "medium", anchor="center")
-        fx.text(s, "A* · Information-Set MCTS · opponent model   vs   particle filter · fuzzy logic · minimax + alpha-beta · GA",
-                (T.W // 2, 418), 14, T.MUTED, "medium", anchor="center")
+        x0 = 110
+        # left column: title block
+        pygame.draw.rect(s, T.RED, (x0, 128, 14, 34))
+        pygame.draw.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
+        fx.spaced(s, "KUET CSE  /  AI LAB FINAL PROJECT", (x0 + 46, 145), 17, T.INK_2, "semibold", 2,
+                  anchor="midleft")
+        fx.text(s, "ZERO DAY", (x0 - 6, 170), 168, T.INK, "bold", display=True)
+        fx.text(s, "An intruder AI and a defender AI on a network", (x0, 362), 22, T.INK, "regular")
+        fx.text(s, "neither of them can fully see.", (x0, 392), 22, T.INK, "regular")
+
+        y = 446
+        for col, side, algos in ((T.RED, "RED  /  INTRUDER", "A* route, Information-Set MCTS, opponent model"),
+                                 (T.BLUE, "BLUE  /  DEFENDER",
+                                  "particle filter, fuzzy logic, minimax + alpha-beta, GA tuning")):
+            pygame.draw.rect(s, col, (x0, y + 3, 4, 34))
+            fx.spaced(s, side, (x0 + 16, y), 15, col, "bold", 2)
+            fx.text(s, algos, (x0 + 16, y + 20), 14, T.INK_2, "regular")
+            y += 50
+
+        # menu list
+        y = 570
+        fx.hrule(s, x0, x0 + 520, y - 12, T.INK, 2)
         for i, ((label, _), r) in enumerate(zip(self._menu_items(), self._menu_rects())):
             sel = i == self.menu_sel
-            col = [T.TEXT, T.RED, T.BLUE, T.MUTED][i]
+            col = [T.INK, T.RED, T.BLUE, T.INK_2][i]
             if sel:
-                fx.blit_glow(s, r.center, 140, col if i < 3 else T.MUTED, 0.25)
-                pygame.draw.rect(s, T.scale(col, 0.22), r, border_radius=25)
-            pygame.draw.rect(s, col if sel else T.PANEL_EDGE, r, 2 if sel else 1, border_radius=25)
-            fx.spaced(s, label, r.center, 15, T.WHITE if sel else col, "bold", 4, anchor="center")
-        fx.text(s, f"Map seed  ◀  {self.seed}  ▶      R: random map", (T.W // 2, 735), 14, T.MUTED, "medium",
-                mono=True, anchor="center")
-        fx.text(s, "Muttakin Rahman Shoscho (2207061)   ·   Yasar Wajih (2207064)", (T.W // 2, 862), 14, T.DIM,
-                "medium", anchor="center")
+                pygame.draw.rect(s, col, r)
+            fx.text(s, f"{i + 1:02d}", (r.x + 14, r.centery), 15, T.PAPER if sel else T.INK_3, "medium", mono=True,
+                    anchor="midleft")
+            fx.spaced(s, label, (r.x + 56, r.centery + 1), 24, T.PAPER if sel else col, "bold", 2, anchor="midleft")
+            if sel:
+                fx.text(s, "Enter", (r.right - 14, r.centery), 13, T.PAPER, "medium", mono=True, anchor="midright")
+            fx.hrule(s, r.x, r.right, r.bottom, T.RULE)
+
+        # right column: the map, printed as a plate with a caption
+        b = self.menu_board
+        b.draw(s, _MenuGame(b.net), "full", self.t)
+        pr = b.rect
+        fx.spaced(s, f"MAP {self.seed}", (pr.x, pr.bottom + 12), 17, T.INK, "bold", 2)
+        fx.text(s, "Left / Right: change map     R: random map", (pr.right, pr.bottom + 14), 13, T.INK_2,
+                "regular", mono=True, anchor="topright")
+        fx.text(s, "Red starts at GW and is after DB. Blue sees every node but never Red.",
+                (pr.x, pr.bottom + 40), 13, T.INK_2, "regular")
+
+        fx.hrule(s, x0, T.W - 60, T.H - 52)
+        fx.text(s, "Muttakin Rahman Shoscho (2207061)     Yasar Wajih (2207064)", (x0, T.H - 30), 14, T.INK_2,
+                "regular", anchor="midleft")
+        fx.text(s, "Up / Down to choose, Enter to start, Esc to quit", (T.W - 60, T.H - 30), 13, T.INK_3,
+                "regular", mono=True, anchor="midright")
 
     def _draw_match(self, s):
         m, g = self.match, self.match.game
@@ -474,21 +485,18 @@ class App:
         for k, t in acts:
             if k == "monitor":
                 continue
-            col = {"patch": T.CYAN, "decoy": T.AMBER, "isolate": T.BLUE_SOFT, "restore": T.BLUE_SOFT}[k]
             p = P[t]
-            fx.blit_glow(s, p, 34, col, 0.6)
-            pygame.draw.circle(s, col, p, 22, 2)
-            fx.text(s, k.upper(), (p[0], p[1] - 26), 10, col, "bold", anchor="midbottom")
+            fx.dashed_circle(s, T.BLUE, p, 22, 2, 16, rot=self.t * 0.8)
+            fx.tag(s, k.upper(), (p[0], p[1] - 32), T.BLUE, 12)
         if self.phase == "reveal" and self.pending_red and self.view != "blue":
             a = self.pending_red
             g = self.match.game
             if len(a) > 1 or a[0] == "claim":
                 tgt = a[1] if len(a) > 1 else self.match.net.database
-                fx.dashed_line(s, T.RED_SOFT, P[g.red_pos], P[tgt], 2, 4, 4, offset=-self.t * 60)
+                fx.dashed_line(s, T.RED, P[g.red_pos], P[tgt], 2, 4, 4, offset=-self.t * 40)
 
     def _draw_thinking(self, s):
         r = self.board.rect
-        x, y = r.centerx, r.bottom - 6
         names = []
         if self.pending_blue is None and not isinstance(self.match.blue, HumanBlue):
             names.append("Blue")
@@ -497,14 +505,15 @@ class App:
         if not names:
             return
         dots = "." * (1 + int(self.t * 3) % 3)
-        fx.text(s, f"{' and '.join(names)} thinking{dots}", (x, y), 12, T.MUTED, "medium", anchor="midbottom")
+        fx.text(s, f"{' and '.join(names)} thinking{dots}", (r.x + 14, r.bottom - 10), 12, T.INK_2, "regular",
+                mono=True, anchor="bottomleft")
 
     def _red_help(self):
         if self.mode != "red":
             return None
         if self.pending_red is not None:
             return ["Move locked in. Waiting for Blue..."]
-        return ["Click a glowing neighbour to move:",
+        return ["Click a marked neighbour to move:",
                 "  free node: Capture (chance = weakness)",
                 "  across a zone gate: Unlock (loud)",
                 "  your own node: Advance (quiet)",
@@ -518,18 +527,18 @@ class App:
         if self.mode != "blue":
             return None
         ap = self._human_blue_ap()
-        lines = [(f"Action points left: {ap} / {C.BLUE_AP}", T.WHITE)]
+        lines = [(f"Action points left: {ap} / {C.BLUE_AP}", T.INK)]
         keys = {"monitor": "Q", "patch": "W", "decoy": "E", "isolate": "A", "restore": "D"}
         for tool in TOOLS:
             sel = tool == self.human_tool
             cost = C.COST[tool]
-            lines.append((f"{'>' if sel else ' '} {keys[tool]}  {tool.title():8s} cost {cost}", T.BLUE_SOFT if sel else T.MUTED))
+            lines.append((f"{'>' if sel else ' '} {keys[tool]}  {tool.title():8s} cost {cost}", T.BLUE if sel else T.INK_2))
         lines.append(("", T.TEXT))
         lines.append(("Click a node to use the tool.", T.TEXT))
         lines.append(("Backspace: undo   Enter: end turn", T.TEXT))
         lines.append(("", T.TEXT))
         for k, t in self.human_blue_acts:
-            lines.append(("  " + blue_act_text(self.match.net, (k, t)), T.WHITE))
+            lines.append(("  " + blue_act_text(self.match.net, (k, t)), T.BLUE))
         g, net = self.match.game, self.match.net
         lines.append(("", T.TEXT))
         lines.append(("Alerts last round:", T.MUTED))
@@ -541,7 +550,7 @@ class App:
         for kind, t, found in g.blue_feedback:
             if kind in ("isolate", "restore"):
                 lines.append((f"  {kind.title()} {net.label[t]}: {'Red was there!' if found else 'nothing found'}",
-                              T.BLUE_SOFT if found else T.DIM))
+                              T.BLUE if found else T.INK_3))
         if g.decoy_sprung is not None:
             lines.append((f"  Decoy sprung on {net.label[g.decoy_sprung]}!", T.AMBER))
         return lines
@@ -554,27 +563,39 @@ class App:
 
     def _draw_result(self, s):
         g, m = self.match.game, self.match
-        k = min(1.0, self.result_t / 0.5)
+        k = min(1.0, self.result_t / 0.4)
         veil = pygame.Surface((T.W, T.H), pygame.SRCALPHA)
-        veil.fill((3, 6, 16, int(170 * k)))
+        veil.fill((*T.PAPER, int(200 * k)))
         s.blit(veil, (0, 0))
         col = T.RED if g.winner == "red" else T.BLUE
         title = "RED WINS" if g.winner == "red" else "BLUE WINS"
-        cx, cy = T.W // 2, T.H // 2 - 40
-        fx.blit_glow(s, (cx, cy - 40), 300, col, 0.5 * k)
-        fx.text(s, title, (cx, cy - 60), 96, T.WHITE, "black", anchor="center", alpha=int(255 * k))
-        fx.text(s, g.reason, (cx, cy + 10), 22, T.scale(col, 1.2), "semibold", anchor="center", alpha=int(255 * k))
-        stats = [("ROUNDS", str(g.round)),
-                 ("RED NODES HELD", str(len(g.red_held))),
-                 ("BLUE FIRST LOCATED RED", f"round {m.located_round}" if m.located_round else "never"),
-                 ("ALERTS RAISED", str(sum(len(r.alerts) for r in g.history)))]
-        x0 = cx - 390
+        card = pygame.Rect(0, 0, 820, 400)
+        card.center = (T.W // 2, T.H // 2 - 30 + int(16 * (1 - k)))
+        shadow = card.move(8, 8)
+        pygame.draw.rect(s, T.PAPER_3, shadow)
+        pygame.draw.rect(s, T.PAPER, card)
+        pygame.draw.rect(s, T.INK, card, 2)
+        pygame.draw.rect(s, col, (card.x, card.y, card.w, 14))
+        x = card.x + 48
+        fx.spaced(s, f"ROUND {g.round}  /  MAP {m.net.seed}", (x, card.y + 40), 16, T.INK_2, "semibold", 2)
+        fx.text(s, title, (x - 4, card.y + 58), 112, col, "bold", display=True)
+        fx.text(s, g.reason[:1].upper() + g.reason[1:] + ".", (x, card.y + 190), 22, T.INK, "regular")
+        stats = [("Rounds", str(g.round)),
+                 ("Red nodes held", str(len(g.red_held))),
+                 ("Blue first located Red", f"round {m.located_round}" if m.located_round else "never"),
+                 ("Alerts raised", str(sum(len(r.alerts) for r in g.history)))]
+        y = card.y + 246
+        fx.hrule(s, x, card.right - 48, y, T.INK)
+        cw = (card.w - 96) // 4
         for i, (lab, val) in enumerate(stats):
-            x = x0 + i * 260
-            fx.spaced(s, lab, (x, cy + 70), 10, T.MUTED, "bold", 2, anchor="midtop")
-            fx.text(s, val, (x, cy + 92), 26, T.WHITE, "bold", anchor="midtop")
-        fx.text(s, "R  replay this map      N  new map      M  menu", (cx, cy + 170), 15, T.MUTED, "medium",
-                mono=True, anchor="center")
+            cx = x + i * cw
+            if i:
+                pygame.draw.line(s, T.RULE, (cx - 12, y + 12), (cx - 12, y + 70))
+            fx.text(s, lab, (cx, y + 14), 12, T.INK_2, "regular")
+            fx.text(s, val, (cx, y + 34), 28, T.INK, "medium", mono=True)
+        fx.hrule(s, x, card.right - 48, y + 84)
+        fx.text(s, "R  replay this map      N  new map      M  menu", (x, card.bottom - 30), 14, T.INK_2, "regular",
+                mono=True, anchor="midleft")
 
     # -- loop -----------------------------------------------------------------------------------
     def run(self):
@@ -609,3 +630,4 @@ class _MenuGame:
         self.red_intel_weak = {}
         self.winner = "blue"
         self.monitored = set()
+        self.history = []

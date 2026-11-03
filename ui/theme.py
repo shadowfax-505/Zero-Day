@@ -1,5 +1,9 @@
-"""Colours, fonts and layout constants. Matches the proposal deck: dark navy,
-Red in glowing red, Blue's defences and belief in blue, the database in gold."""
+"""Colours, fonts and layout constants.
+
+Art direction: a printed operations map. Warm paper, black ink for the network,
+two spot inks for the sides (vermilion for Red, Prussian blue for Blue), ochre
+for the database and orange only for alerts. No glows, no gradients: shapes,
+hatching and type do the work."""
 
 import os
 
@@ -11,42 +15,57 @@ SIDE_W = 340
 BOTTOM_H = 150
 BOARD = pygame.Rect(SIDE_W + 16, TOP_H + 12, W - 2 * SIDE_W - 32, H - TOP_H - BOTTOM_H - 24)
 
-BG = (5, 9, 22)
-BG2 = (9, 16, 36)
-GRID = (14, 25, 50)
-PANEL = (10, 17, 36)
-PANEL_EDGE = (28, 44, 80)
-TEXT = (226, 233, 245)
-MUTED = (122, 140, 175)
-DIM = (70, 86, 120)
-EDGE = (40, 66, 110)
-EDGE_LIT = (80, 120, 180)
-NODE = (12, 22, 46)
-NODE_RING = (96, 130, 190)
-RED = (255, 59, 92)
-RED_SOFT = (255, 120, 140)
-BLUE = (64, 156, 255)
-BLUE_SOFT = (130, 190, 255)
-CYAN = (60, 230, 230)
-GOLD = (255, 194, 75)
-AMBER = (255, 170, 40)
-GREEN = (80, 230, 160)
-WHITE = (255, 255, 255)
-ZONE_TINT = [(30, 50, 95), (24, 40, 80), (40, 34, 70)]
+# paper and ink
+PAPER = (237, 232, 221)
+PAPER_2 = (229, 223, 209)       # zone tint, panel wells
+PAPER_3 = (218, 211, 195)       # fog, bar tracks
+GRID = (226, 220, 206)
+RULE = (190, 182, 164)          # hairlines
+INK = (30, 31, 34)
+INK_2 = (86, 84, 78)            # secondary text
+INK_3 = (138, 132, 120)         # tertiary text, idle links
+EDGE = (128, 122, 110)
+
+# spot colours
+RED = (196, 52, 34)
+RED_DARK = (140, 34, 22)
+RED_TINT = (236, 200, 188)
+BLUE = (28, 72, 138)
+BLUE_DARK = (18, 46, 92)
+BLUE_TINT = (200, 212, 230)
+OCHRE = (172, 118, 16)
+OCHRE_TINT = (238, 220, 176)
+ALERT = (214, 112, 18)
+GREEN = (62, 116, 72)
+
+# names the rest of the UI uses
+BG = PAPER
+TEXT = INK
+MUTED = INK_2
+DIM = INK_3
+GOLD = OCHRE
+AMBER = ALERT
+RED_SOFT = RED
+BLUE_SOFT = BLUE
 
 ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
 _fonts = {}
 
+_SANS = {"regular": "IBMPlexSans-Regular.ttf", "medium": "IBMPlexSans-Medium.ttf",
+         "semibold": "IBMPlexSans-SemiBold.ttf", "bold": "IBMPlexSans-Bold.ttf", "black": "IBMPlexSans-Bold.ttf"}
+_MONO = {"regular": "IBMPlexMono-Regular.ttf", "medium": "IBMPlexMono-Medium.ttf",
+         "semibold": "IBMPlexMono-SemiBold.ttf", "bold": "IBMPlexMono-SemiBold.ttf", "black": "IBMPlexMono-SemiBold.ttf"}
+_DISPLAY = {"regular": "BarlowCondensed-Medium.ttf", "medium": "BarlowCondensed-Medium.ttf",
+            "semibold": "BarlowCondensed-SemiBold.ttf", "bold": "BarlowCondensed-Bold.ttf",
+            "black": "BarlowCondensed-Bold.ttf"}
 
-def font(size, weight="regular", mono=False):
-    key = (size, weight, mono)
+
+def font(size, weight="regular", mono=False, display=False):
+    """IBM Plex Sans for text, Plex Mono for numbers, Barlow Condensed for headings."""
+    key = (size, weight, mono, display)
     if key not in _fonts:
-        if mono:
-            name = "DejaVuSansMono-Bold.ttf" if weight == "bold" else "DejaVuSansMono.ttf"
-        else:
-            name = {"regular": "Inter-Regular.otf", "medium": "Inter-Medium.otf", "semibold": "Inter-SemiBold.otf",
-                    "bold": "Inter-Bold.otf", "black": "InterDisplay-Black.otf"}[weight]
-        path = os.path.join(ASSETS, name)
+        table = _DISPLAY if display else _MONO if mono else _SANS
+        path = os.path.join(ASSETS, table[weight])
         try:
             _fonts[key] = pygame.font.Font(path, size)
         except (FileNotFoundError, OSError):
@@ -60,6 +79,11 @@ def lerp(a, b, t):
 
 def mix(c1, c2, t):
     return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
+
+
+def fade(c, k):
+    """Colour c faded k of the way towards the paper (k=1 is invisible)."""
+    return mix(c, PAPER, max(0.0, min(1.0, k)))
 
 
 def scale(c, k):

@@ -48,7 +48,7 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `M` / `Esc` | Back to the menu |
 | `F12` | Screenshot |
 
-**Playing as Red:** click a glowing neighbouring node to capture it (or unlock it across a zone border,
+**Playing as Red:** click a marked neighbouring node to capture it (or unlock it across a zone border,
 advance onto your own node, or claim the database). `S` scouts.
 **Playing as Blue:** pick a tool with `Q` monitor, `W` patch, `E` decoy, `A` isolate, `D` restore, click a
 node to use it, `Backspace` to undo, `Enter` to end the turn.
@@ -201,4 +201,4 @@ Every knob is in `engine/config.py`.
 
 ## Credits
 
-Fonts: Inter (SIL Open Font License) and DejaVu Sans Mono (free license); licences in `assets/fonts/`.
+Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (all SIL Open Font License); licences in `assets/fonts/`.
