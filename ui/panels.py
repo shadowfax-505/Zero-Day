@@ -1,4 +1,5 @@
-"""Top bar, the two AI panels and the bottom log/controls strip."""
+"""Top bar, the two AI panels and the bottom log/controls strip. Laid out like
+a printed briefing sheet: hairline rules, condensed headings, mono numbers."""
 
 import math
 
@@ -31,268 +32,287 @@ def blue_act_text(net, a):
     return f"{ACTION_WORD[k]} {net.label[t]}"
 
 
+# -- top bar --------------------------------------------------------------------
 def draw_top(surf, match, view, speed, paused, mode_label, t):
     g, net = match.game, match.net
-    pygame.draw.rect(surf, (7, 12, 28), (0, 0, T.W, T.TOP_H))
-    pygame.draw.line(surf, T.PANEL_EDGE, (0, T.TOP_H), (T.W, T.TOP_H))
-    fx.blit_glow(surf, (70, 32), 50, T.RED, 0.35)
-    fx.text(surf, "ZERO", (24, 32), 26, T.WHITE, "black", anchor="midleft")
-    fx.text(surf, "DAY", (100, 32), 26, T.RED, "black", anchor="midleft")
-    fx.spaced(surf, mode_label, (170, 25), 11, T.MUTED, "semibold", 2)
+    pygame.draw.rect(surf, T.PAPER, (0, 0, T.W, T.TOP_H))
+    pygame.draw.line(surf, T.INK, (0, T.TOP_H - 1), (T.W, T.TOP_H - 1), 2)
 
-    # round counter
-    cx = T.W // 2
-    fx.spaced(surf, "ROUND", (cx - 70, 14), 10, T.MUTED, "semibold", 3)
-    fx.text(surf, f"{min(g.round, C.MAX_ROUNDS):02d}", (cx - 70, 24), 26, T.WHITE, "bold", mono=True)
-    fx.text(surf, f"/ {C.MAX_ROUNDS}", (cx - 22, 34), 14, T.MUTED, "medium", mono=True)
-    br = pygame.Rect(cx + 30, 30, 220, 6)
-    fx.bar(surf, br, g.round / C.MAX_ROUNDS, T.mix(T.BLUE, T.RED, g.round / C.MAX_ROUNDS))
+    # masthead
+    pygame.draw.rect(surf, T.RED, (24, 20, 8, 24))
+    pygame.draw.rect(surf, T.BLUE, (34, 20, 8, 24))
+    fx.text(surf, "ZERO DAY", (52, 32), 34, T.INK, "bold", display=True, anchor="midleft")
+    pygame.draw.line(surf, T.RULE, (170, 18), (170, 46))
+    fx.spaced(surf, mode_label, (184, 32), 15, T.INK_2, "semibold", 2, anchor="midleft")
 
-    # view pills
-    x = T.W - 24
-    for v in ("blue", "full", "red"):
-        name = VIEW_NAMES[v]
-        f = T.font(11, "bold")
-        w = f.size(name)[0] + 22
-        r = pygame.Rect(x - w, 18, w, 28)
+    # round counter with a ruler of 40 ticks
+    cx = T.W // 2 - 150
+    fx.spaced(surf, "ROUND", (cx, 32), 15, T.INK_2, "semibold", 2, anchor="midleft")
+    r_now = min(g.round, C.MAX_ROUNDS)
+    fx.text(surf, f"{r_now:02d}", (cx + 62, 33), 30, T.INK, "semibold", mono=True, anchor="midleft")
+    fx.text(surf, f"/{C.MAX_ROUNDS}", (cx + 102, 37), 14, T.INK_3, "medium", mono=True, anchor="midleft")
+    x0 = cx + 150
+    for i in range(C.MAX_ROUNDS):
+        x = x0 + i * 6
+        done = i < r_now
+        h = 14 if (i + 1) % 10 == 0 else 9
+        pygame.draw.line(surf, T.INK if done else T.RULE, (x, 40 - h), (x, 40), 2)
+
+    # view switch: one segmented control
+    names = [("red", "RED"), ("full", "FULL"), ("blue", "BLUE")]
+    f = T.font(15, "semibold", display=True)
+    seg_w = 64
+    right = T.W - 24
+    box = pygame.Rect(right - seg_w * 3, 17, seg_w * 3, 30)
+    for i, (v, name) in enumerate(names):
+        r = pygame.Rect(box.x + i * seg_w, box.y, seg_w, box.h)
         active = v == view
-        col = {"red": T.RED, "blue": T.BLUE, "full": T.TEXT}[v]
+        col = {"red": T.RED, "blue": T.BLUE, "full": T.INK}[v]
         if active:
-            pygame.draw.rect(surf, T.scale(col, 0.25), r, border_radius=14)
-            pygame.draw.rect(surf, col, r, 1, border_radius=14)
-        else:
-            pygame.draw.rect(surf, T.PANEL_EDGE, r, 1, border_radius=14)
-        fx.text(surf, name, r.center, 11, col if active else T.MUTED, "bold", anchor="center")
-        x -= w + 8
-    state = "PAUSED" if paused else f"{speed:g}x"
-    fx.text(surf, f"seed {net.seed}  ·  {state}", (x - 14, 32), 12, T.MUTED, "medium", mono=True, anchor="midright")
+            pygame.draw.rect(surf, col, r)
+        fx.spaced(surf, name, r.center, 15, T.PAPER if active else T.INK_2, "semibold", 2, anchor="center")
+        if i:
+            pygame.draw.line(surf, T.INK, (r.x, r.y), (r.x, r.bottom - 1))
+    pygame.draw.rect(surf, T.INK, box, 1)
+    fx.spaced(surf, "VIEW", (box.x - 10, 32), 15, T.INK_3, "semibold", 2, anchor="midright")
+    state = "paused" if paused else f"{speed:g}x"
+    fx.text(surf, f"map {net.seed}   {state}", (box.x - 70, 33), 13, T.INK_2, "medium", mono=True,
+            anchor="midright")
 
 
-def _header(surf, rect, title, sub, color):
-    pygame.draw.rect(surf, color, (rect.x, rect.y + 16, 4, 34), border_radius=2)
-    fx.spaced(surf, title, (rect.x + 18, rect.y + 14), 12, color, "bold", 3)
-    fx.text(surf, sub, (rect.x + 18, rect.y + 32), 13, T.MUTED, "medium")
+# -- side panels ------------------------------------------------------------------
+def _frame(surf, rect, color, title, sub):
+    pygame.draw.rect(surf, T.PAPER, rect)
+    pygame.draw.rect(surf, color, (rect.x, rect.y, rect.w, 5))
+    fx.text(surf, title, (rect.x + 20, rect.y + 16), 26, color, "bold", display=True)
+    fx.text(surf, sub, (rect.x + 20, rect.y + 48), 12, T.INK_2, "regular")
+
+
+def _section(surf, x, y, w, title, note=None):
+    fx.hrule(surf, x, x + w, y)
+    fx.label(surf, title, (x, y + 7))
+    if note:
+        fx.text(surf, note, (x + w, y + 9), 11, T.INK_3, "regular", mono=True, anchor="topright")
+    return y + 30
 
 
 def _row(surf, x, y, label, value, vcol=T.TEXT, w=300):
-    fx.text(surf, label, (x, y), 12, T.MUTED, "medium")
+    fx.text(surf, label, (x, y), 13, T.INK_2, "regular")
     fx.text(surf, value, (x + w, y), 13, vcol, "semibold", anchor="topright")
 
 
 def _hidden(surf, rect, color, who):
-    fx.text(surf, f"Hidden in {who}'s view", (rect.centerx, rect.centery - 10), 15, T.scale(color, 0.8), "semibold",
-            anchor="center")
-    fx.text(surf, "Press V to switch view", (rect.centerx, rect.centery + 14), 12, T.DIM, "medium", anchor="center")
+    box = pygame.Rect(rect.x + 20, rect.y + 80, rect.w - 40, rect.h - 100)
+    fx.hatch(surf, box, T.PAPER_3, 9, 1)
+    pygame.draw.rect(surf, T.RULE, box, 1)
+    fx.tag(surf, f"NOT VISIBLE IN {who.upper()}'S VIEW", (box.centerx, box.centery - 12), color, 15)
+    fx.text(surf, "Press V to switch view", (box.centerx, box.centery + 16), 12, T.INK_2, "regular", anchor="center")
 
 
 def draw_red_panel(surf, rect, match, view, human=False, human_help=None):
     g, net, d = match.game, match.net, match.red_debug
-    fx.rounded_panel(surf, rect)
-    _header(surf, rect, "RED · INTRUDER", "A* route · IS-MCTS · opponent model" if not human else "You are playing Red",
-            T.RED)
+    _frame(surf, rect, T.RED, "RED  /  INTRUDER",
+           "A* route, IS-MCTS, opponent model" if not human else "You are playing Red")
     if view == "blue":
         _hidden(surf, rect, T.RED, "Blue")
         return
-    x, y, w = rect.x + 20, rect.y + 66, rect.w - 40
-    _row(surf, x, y, "Target", "Database", T.GOLD, w)
-    y += 22
-    _row(surf, x, y, "Position", f"{net.label[g.red_pos]}  ·  {C.ZONE_NAMES[net.zone[g.red_pos]].title()}", T.RED_SOFT, w)
-    y += 22
-    _row(surf, x, y, "Nodes held", str(len(g.red_held)), T.TEXT, w)
-    y += 22
+    x, w = rect.x + 20, rect.w - 40
+    y = rect.y + 76
     hops = net.hops_to_db[g.red_pos]
-    _row(surf, x, y, "Links to database", str(hops) if hops != math.inf else "-", T.TEXT, w)
-    y += 30
+    _row(surf, x, y, "Position", f"{net.label[g.red_pos]}  {C.ZONE_NAMES[net.zone[g.red_pos]].title()}", T.RED, w)
+    y += 20
+    _row(surf, x, y, "Nodes held", str(len(g.red_held)), T.INK, w)
+    y += 20
+    _row(surf, x, y, "Links to database", str(hops) if hops != math.inf else "-", T.OCHRE, w)
+    y += 28
 
     if human:
-        fx.spaced(surf, "YOUR MOVES", (x, y), 10, T.MUTED, "bold", 2)
-        y += 20
+        y = _section(surf, x, y, w, "Your moves")
         for line in human_help or []:
-            fx.text(surf, line, (x, y), 12, T.TEXT, "medium")
+            fx.text(surf, line, (x, y), 12, T.INK, "regular")
             y += 19
         return
 
-    fx.spaced(surf, "NEXT MOVE", (x, y), 10, T.MUTED, "bold", 2)
-    y += 18
-    fx.text(surf, act_text(net, d.get("next")), (x, y), 19, T.WHITE, "bold")
-    y += 28
+    y = _section(surf, x, y, w, "Next move")
+    fx.text(surf, act_text(net, d.get("next")), (x, y - 4), 22, T.INK, "semibold")
+    y += 26
     astar = d.get("astar_next")
     if astar and d.get("next") and tuple(astar) != tuple(d["next"]):
-        fx.text(surf, f"MCTS overrode A* ({act_text(net, astar)})", (x, y), 11, T.AMBER, "medium")
+        fx.text(surf, f"MCTS overrode A* ({act_text(net, astar)})", (x, y), 12, T.ALERT, "medium")
     else:
-        fx.text(surf, "A* and MCTS agree", (x, y), 11, T.DIM, "medium")
+        fx.text(surf, "A* and MCTS agree", (x, y), 12, T.INK_3, "regular")
     y += 22
     risk = d.get("risk", 0.0)
-    fx.text(surf, "Detection risk", (x, y), 12, T.MUTED, "medium")
-    fx.text(surf, f"{int(risk * 100)}%", (x + w, y), 12, T.TEXT, "semibold", anchor="topright")
+    fx.text(surf, "Detection risk", (x, y), 12, T.INK_2, "regular")
+    fx.text(surf, f"{int(risk * 100)}%", (x + w, y), 12, T.INK, "medium", mono=True, anchor="topright")
+    y += 19
+    fx.bar(surf, pygame.Rect(x, y, w, 4), risk, T.RED)
     y += 18
-    fx.bar(surf, pygame.Rect(x, y, w, 6), risk, T.mix(T.GREEN, T.RED, min(1.0, risk * 1.6)))
-    y += 22
 
-    fx.spaced(surf, "MONTE CARLO SEARCH", (x, y), 10, T.MUTED, "bold", 2)
-    fx.text(surf, f"{d.get('iterations', 0)} sims · {d.get('think_ms', 0)} ms", (x + w, y - 1), 11, T.DIM,
-            "medium", mono=True, anchor="topright")
-    y += 20
+    y = _section(surf, x, y, w, "Monte Carlo search", f"{d.get('iterations', 0)} sims  {d.get('think_ms', 0)} ms")
     stats = d.get("mcts") or []
     total = sum(n for _, n, _ in stats) or 1
     for a, n, q in stats[:4]:
         chosen = d.get("next") and tuple(a) == tuple(d["next"])
-        fx.text(surf, act_text(net, a), (x, y), 12, T.WHITE if chosen else T.MUTED, "semibold" if chosen else "medium")
-        fx.text(surf, f"{q:.2f}", (x + w, y), 11, T.MUTED, "medium", mono=True, anchor="topright")
+        fx.text(surf, act_text(net, a), (x, y), 12, T.INK if chosen else T.INK_2, "semibold" if chosen else "regular")
+        fx.text(surf, f"{q:.2f}", (x + w, y), 11, T.INK_2, "regular", mono=True, anchor="topright")
         y += 17
-        fx.bar(surf, pygame.Rect(x, y, w, 5), n / total, T.RED if chosen else T.scale(T.RED, 0.45))
-        y += 12
+        fx.bar(surf, pygame.Rect(x, y, w, 3), n / total, T.RED if chosen else T.fade(T.RED, 0.55))
+        y += 10
     if not stats:
-        fx.text(surf, "-", (x, y), 12, T.DIM)
+        fx.text(surf, "-", (x, y), 12, T.INK_3)
         y += 18
-    y += 8
+    y += 6
 
-    fx.spaced(surf, "OPPONENT MODEL", (x, y), 10, T.MUTED, "bold", 2)
-    y += 20
+    y = _section(surf, x, y, w, "Opponent model", "P(zone watched)")
     m = d.get("model", {})
     pm = m.get("p_monitor", [0, 0, 0])
     bw = (w - 20) // 3
     for z in range(3):
         bx = x + z * (bw + 10)
-        fx.text(surf, C.ZONE_NAMES[z].title(), (bx, y), 11, T.MUTED, "medium")
-        fx.bar(surf, pygame.Rect(bx, y + 17, bw, 5), pm[z], T.BLUE_SOFT)
-        fx.text(surf, f"{int(pm[z] * 100)}%", (bx + bw, y), 11, T.TEXT, "medium", mono=True, anchor="topright")
+        fx.text(surf, C.ZONE_NAMES[z].title(), (bx, y), 11, T.INK_2, "regular")
+        fx.text(surf, f"{int(pm[z] * 100)}%", (bx + bw, y), 11, T.INK, "medium", mono=True, anchor="topright")
+        fx.bar(surf, pygame.Rect(bx, y + 18, bw, 3), pm[z], T.BLUE)
     y += 30
-    fx.text(surf, "P(zone watched)  ·  caught " + str(m.get("caught", 0)) + "  ·  decoys hit " +
-            str(m.get("decoys_found", 0)), (x, y), 11, T.DIM, "medium")
-    y += 20
+    fx.text(surf, f"caught {m.get('caught', 0)}   decoys hit {m.get('decoys_found', 0)}", (x, y), 11, T.INK_3,
+            "regular", mono=True)
     y += 26
+
     route = d.get("route") or []
     if route:
-        fx.spaced(surf, "A* ROUTE", (x, y), 10, T.MUTED, "bold", 2)
-        y += 20
+        y = _section(surf, x, y, w, "A* route")
         cx = x
-        steps = [net.label[u] for u in route] + ([] if d.get("reaches_db") else ["fog...", "DB"])
+        steps = [net.label[u] for u in route] + ([] if d.get("reaches_db") else ["?", "DB"])
+        f = T.font(11, "medium", mono=True)
         for i, lab in enumerate(steps):
-            f = T.font(11, "semibold")
-            wlab = f.size(lab)[0] + 14
-            if cx + wlab > x + w:
+            wlab = f.size(lab)[0] + 12
+            if cx + wlab + 14 > x + w:
                 cx = x
                 y += 24
-            r = pygame.Rect(cx, y, wlab, 20)
-            col = T.GOLD if lab == "DB" else (T.MUTED if lab == "fog..." else T.RED_SOFT)
-            pygame.draw.rect(surf, T.scale(col, 0.18), r, border_radius=10)
-            fx.text(surf, lab, r.center, 11, col, "semibold", anchor="center")
-            cx += wlab + 6
+            r = pygame.Rect(cx, y, wlab, 19)
+            col = T.OCHRE if lab == "DB" else (T.INK_3 if lab == "?" else T.RED)
+            pygame.draw.rect(surf, col, r, 1)
+            fx.text(surf, lab, r.center, 11, col, "medium", mono=True, anchor="center")
+            cx += wlab
+            if i < len(steps) - 1:
+                pygame.draw.line(surf, T.INK_3, (cx + 2, r.centery), (cx + 9, r.centery), 1)
+                cx += 12
         y += 30
     sus = [(u, p) for u, p in d.get("decoy_suspects", []) if p > 0.05]
     if sus:
         fx.text(surf, "Decoy suspects: " + ", ".join(f"{net.label[u]} {int(p * 100)}%" for u, p in sus[:3]),
-                (x, y), 11, T.AMBER, "medium")
+                (x, y), 11, T.INK_2, "regular")
 
 
 def draw_blue_panel(surf, rect, match, view, human=False, human_help=None):
     g, net, d = match.game, match.net, match.blue_debug
-    fx.rounded_panel(surf, rect)
-    _header(surf, rect, "BLUE · DEFENDER", "particle filter · fuzzy · minimax" if not human else "You are playing Blue",
-            T.BLUE)
+    _frame(surf, rect, T.BLUE, "BLUE  /  DEFENDER",
+           "particle filter, fuzzy logic, minimax + alpha-beta" if not human else "You are playing Blue")
     if view == "red":
         _hidden(surf, rect, T.BLUE, "Red")
         return
-    x, y, w = rect.x + 20, rect.y + 66, rect.w - 40
+    x, w = rect.x + 20, rect.w - 40
+    y = rect.y + 76
     if human:
-        fx.spaced(surf, "YOUR TOOLS", (x, y), 10, T.MUTED, "bold", 2)
-        y += 20
+        y = _section(surf, x, y, w, "Your tools")
         for line in human_help or []:
             col = line[1] if isinstance(line, tuple) else T.TEXT
             s = line[0] if isinstance(line, tuple) else line
-            fx.text(surf, s, (x, y), 12, col, "medium")
+            fx.text(surf, s, (x, y), 12, col, "regular", mono=s.startswith((">", " ")))
             y += 19
         return
 
-    fx.spaced(surf, "WHERE IS RED?", (x, y), 10, T.MUTED, "bold", 2)
-    fx.text(surf, f"entropy {d.get('entropy', 0):.2f} bits", (x + w, y - 1), 11, T.DIM, "medium", mono=True,
-            anchor="topright")
-    y += 20
+    y = _section(surf, x, y, w, "Where is Red?", f"entropy {d.get('entropy', 0):.2f} bits")
     for u, p in (d.get("top") or [])[:5]:
         truth = view == "full" and u == g.red_pos
-        fx.text(surf, net.label[u], (x, y), 12, T.WHITE if truth else T.TEXT, "semibold")
+        fx.text(surf, net.label[u], (x, y), 12, T.INK, "semibold" if truth else "regular", mono=True)
         if truth:
-            fx.text(surf, "RED IS HERE", (x + 62, y + 1), 9, T.RED_SOFT, "bold")
-        fx.text(surf, f"{p * 100:.0f}%", (x + w, y), 12, T.BLUE_SOFT, "semibold", mono=True, anchor="topright")
+            fx.text(surf, "actual position", (x + 58, y + 1), 11, T.RED, "medium")
+        fx.text(surf, f"{p * 100:.0f}%", (x + w, y), 12, T.BLUE, "medium", mono=True, anchor="topright")
         y += 17
-        fx.bar(surf, pygame.Rect(x, y, w, 5), p, T.BLUE)
-        y += 12
-    y += 10
+        fx.bar(surf, pygame.Rect(x, y, w, 3), p, T.BLUE)
+        y += 10
+    y += 6
 
-    fx.spaced(surf, "FUZZY THREAT", (x, y), 10, T.MUTED, "bold", 2)
-    y += 20
+    y = _section(surf, x, y, w, "Fuzzy threat")
     mt = d.get("max_threat", 0.0)
     lvl = "ACT" if mt >= match.blue.weights["act"] else "WATCH" if mt >= match.blue.weights["watch"] else "CALM"
-    col = {"ACT": T.RED_SOFT, "WATCH": T.AMBER, "CALM": T.GREEN}[lvl]
-    fx.text(surf, f"{mt:.0f}", (x, y - 2), 28, T.WHITE, "bold", mono=True)
-    fx.text(surf, lvl, (x + 64, y + 8), 13, col, "bold")
-    gr = pygame.Rect(x + 120, y + 12, w - 120, 8)
-    fx.bar(surf, gr, mt / 100, T.mix(T.GREEN, T.RED, mt / 100))
+    col = {"ACT": T.RED, "WATCH": T.ALERT, "CALM": T.GREEN}[lvl]
+    fx.text(surf, f"{mt:.0f}", (x, y - 6), 32, T.INK, "medium", mono=True)
+    fx.spaced(surf, lvl, (x + 60, y + 3), 17, col, "bold", 2)
+    gr = pygame.Rect(x + 130, y + 10, w - 130, 6)
+    fx.bar(surf, gr, mt / 100, col)
     for thr in (match.blue.weights["watch"], match.blue.weights["act"]):
         tx = gr.x + int(gr.w * thr / 100)
-        pygame.draw.line(surf, T.TEXT, (tx, gr.y - 3), (tx, gr.bottom + 3), 1)
-    y += 40
+        pygame.draw.line(surf, T.INK, (tx, gr.y - 4), (tx, gr.bottom + 3), 1)
+    y += 36
     for u, sc, level in (d.get("threat_top") or [])[:3]:
-        fx.text(surf, net.label[u], (x, y), 12, T.TEXT, "medium")
-        fx.text(surf, f"{sc:.0f}  {level}", (x + w, y), 11, T.MUTED, "medium", mono=True, anchor="topright")
+        fx.text(surf, net.label[u], (x, y), 12, T.INK, "regular", mono=True)
+        fx.text(surf, f"{sc:.0f}  {level}", (x + w, y), 11, T.INK_2, "regular", mono=True, anchor="topright")
         y += 17
-    y += 10
+    y += 8
 
-    fx.spaced(surf, "MINIMAX + ALPHA-BETA", (x, y), 10, T.MUTED, "bold", 2)
-    y += 16
-    fx.text(surf, f"{d.get('options', 0)} plans vs Red's best replies · {d.get('evaluated', 0)} evals",
-            (x, y), 11, T.DIM, "medium")
-    y += 22
+    y = _section(surf, x, y, w, "Minimax + alpha-beta")
+    fx.text(surf, f"{d.get('options', 0)} plans vs Red's best replies, {d.get('evaluated', 0)} evals",
+            (x, y - 4), 11, T.INK_3, "regular")
+    y += 18
     for a in d.get("actions") or []:
         cost = C.action_cost(a[0], a[1], net.gateway)
-        fx.text(surf, blue_act_text(net, a), (x, y), 14, T.WHITE, "semibold")
+        fx.text(surf, blue_act_text(net, a), (x, y), 15, T.INK, "semibold")
         for i in range(cost):
-            pygame.draw.circle(surf, T.BLUE, (x + w - i * 12, y + 9), 4)
+            pygame.draw.rect(surf, T.BLUE, (x + w - 8 - i * 12, y + 6, 8, 8))
         y += 22
     if not d.get("actions"):
-        fx.text(surf, "Hold (no action)", (x, y), 13, T.DIM, "medium")
+        fx.text(surf, "Hold (no action)", (x, y), 13, T.INK_3, "regular")
         y += 22
-    y += 12
-    fx.spaced(surf, "ALERTS LAST ROUND", (x, y), 10, T.MUTED, "bold", 2)
-    y += 20
+    y += 8
+    y = _section(surf, x, y, w, "Alerts last round")
     alerts = g.history[-1].alerts if g.history else []
     if not alerts:
-        fx.text(surf, "quiet", (x, y), 12, T.DIM, "medium")
+        fx.text(surf, "quiet", (x, y), 12, T.INK_3, "regular")
     for u, s_, real in alerts[:4]:
-        fx.text(surf, net.label[u], (x, y), 12, T.AMBER, "semibold")
-        fx.bar(surf, pygame.Rect(x + 70, y + 6, w - 160, 5), s_, T.AMBER)
+        fx.text(surf, net.label[u], (x, y), 12, T.ALERT, "semibold", mono=True)
+        fx.bar(surf, pygame.Rect(x + 70, y + 7, w - 160, 3), s_, T.ALERT)
         tag = ("real" if real else "false alarm") if view == "full" else f"{s_:.2f}"
-        fx.text(surf, tag, (x + w, y), 11, T.MUTED if not real else T.TEXT, "medium", anchor="topright")
+        fx.text(surf, tag, (x + w, y), 11, T.INK if real else T.INK_2, "regular", anchor="topright")
         y += 18
-    y = max(y + 10, rect.bottom - 34)
+    y = max(y + 10, rect.bottom - 30)
     ready = g.round >= g.isolate_ready
-    fx.text(surf, f"Decoys {len(g.decoys)}/{C.MAX_DECOYS}   ·   Isolate {'ready' if ready else 'recharging'}",
-            (x, y), 11, T.DIM, "medium")
+    fx.hrule(surf, x, x + w, y - 8)
+    fx.text(surf, f"Decoys {len(g.decoys)}/{C.MAX_DECOYS}      Isolate {'ready' if ready else 'recharging'}",
+            (x, y), 11, T.INK_2, "regular", mono=True)
 
 
+# -- bottom strip -----------------------------------------------------------------
 def draw_bottom(surf, log_lines, controls, t):
     r = pygame.Rect(0, T.H - T.BOTTOM_H, T.W, T.BOTTOM_H)
-    pygame.draw.rect(surf, (7, 12, 28), r)
-    pygame.draw.line(surf, T.PANEL_EDGE, r.topleft, r.topright)
-    fx.spaced(surf, "MOVE LOG", (24, r.y + 14), 10, T.MUTED, "bold", 2)
-    y = r.y + 34
-    for rnd, col, s in log_lines[-5:]:
-        fx.text(surf, f"R{rnd:02d}", (24, y), 12, T.DIM, "medium", mono=True)
-        fx.text(surf, s, (68, y), 13, col, "medium")
+    pygame.draw.rect(surf, T.PAPER, r)
+    pygame.draw.line(surf, T.INK, r.topleft, r.topright, 2)
+    fx.label(surf, "Move log", (24, r.y + 12))
+    y = r.y + 38
+    for i, (rnd, col, s) in enumerate(log_lines[-5:]):
+        if i:
+            fx.hrule(surf, 24, 900, y - 3, T.PAPER_3)
+        fx.text(surf, f"R{rnd:02d}", (24, y), 12, T.INK_3, "regular", mono=True)
+        fx.text(surf, s, (68, y), 13, col, "regular")
         y += 21
-    x = T.W - 24
-    y = r.y + 16
+
+    # controls: two columns of keycaps
+    pygame.draw.line(surf, T.RULE, (1010, r.y + 14), (1010, T.H - 14))
+    fx.label(surf, "Controls", (1032, r.y + 12))
+    cols = [1032, 1300]
+    x_i, y = 0, r.y + 38
     for keycap, label in controls:
-        f = T.font(11, "bold", mono=True)
-        kw = f.size(keycap)[0] + 14
-        lw = T.font(12, "medium").size(label)[0]
-        kr = pygame.Rect(x - lw - kw - 8, y, kw, 22)
-        pygame.draw.rect(surf, (20, 32, 60), kr, border_radius=5)
-        pygame.draw.rect(surf, T.PANEL_EDGE, kr, 1, border_radius=5)
-        fx.text(surf, keycap, kr.center, 11, T.TEXT, "bold", mono=True, anchor="center")
-        fx.text(surf, label, (x, y + 11), 12, T.MUTED, "medium", anchor="midright")
+        x = cols[x_i]
+        f = T.font(11, "medium", mono=True)
+        kw = max(22, f.size(keycap)[0] + 12)
+        kr = pygame.Rect(x, y, kw, 20)
+        pygame.draw.rect(surf, T.PAPER_2, kr)
+        pygame.draw.rect(surf, T.INK_2, kr, 1)
+        pygame.draw.line(surf, T.INK_2, (kr.x + 1, kr.bottom), (kr.right - 1, kr.bottom), 1)
+        fx.text(surf, keycap, kr.center, 11, T.INK, "medium", mono=True, anchor="center")
+        fx.text(surf, label, (kr.right + 10, y + 10), 12, T.INK_2, "regular", anchor="midleft")
         y += 26
         if y > T.H - 30:
-            y = r.y + 16
-            x -= 230
+            y = r.y + 38
+            x_i = min(x_i + 1, len(cols) - 1)
