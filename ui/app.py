@@ -36,19 +36,22 @@ AUTO_NEXT_SECONDS = 6.0
 
 # rebound by _use_skin()
 T = fx = Board = VIEWS = screens = None
-draw_top = draw_red_panel = draw_blue_panel = draw_bottom = act_text = blue_act_text = None
+draw_top = draw_red_panel = draw_blue_panel = draw_bottom = act_text = blue_act_text = view_rects = None
+
+VIEW_KEYS = {pygame.K_1: "red", pygame.K_2: "full", pygame.K_3: "blue",
+             pygame.K_KP1: "red", pygame.K_KP2: "full", pygame.K_KP3: "blue"}
 
 
 def _use_skin(name):
     global T, fx, Board, VIEWS, screens, draw_top, draw_red_panel, draw_blue_panel, draw_bottom, act_text, \
-        blue_act_text
+        blue_act_text, view_rects
     sk = skins.load(name)
     T, fx, screens = sk.T, sk.fx, sk.screens
     Board, VIEWS = sk.board.Board, sk.board.VIEWS
     p = sk.panels
     draw_top, draw_red_panel, draw_blue_panel, draw_bottom = p.draw_top, p.draw_red_panel, p.draw_blue_panel, \
         p.draw_bottom
-    act_text, blue_act_text = p.act_text, p.blue_act_text
+    act_text, blue_act_text, view_rects = p.act_text, p.blue_act_text, p.view_rects
     return sk
 
 
@@ -616,6 +619,13 @@ class App:
         self.match.blue_debug = {"actions": list(self.human_blue_acts)}
 
     # -- events ---------------------------------------------------------------------------
+    def _set_view(self, v):
+        if v != self.view:
+            self.view = v
+            self.sound.play("click")
+            if sys.platform == "emscripten":
+                print(f"view: {v}")          # tools/web_smoke.py checks for this line
+
     def handle(self, ev):
         if ev.type == pygame.QUIT:
             return False
@@ -671,21 +681,16 @@ class App:
                     return True
                 if k in (pygame.K_r, pygame.K_n):
                     return True
+            if self.mode == "ai" and (k == pygame.K_v or k in VIEW_KEYS):
+                self._set_view(VIEW_KEYS.get(k) or VIEWS[(VIEWS.index(self.view) + 1) % 3])
+                return True
             if self.state == "result":
                 if k == pygame.K_r:
                     self.start_match(self.mode, same_map=True)
                 elif k in (pygame.K_n, pygame.K_RETURN):
                     self._new_map()
                 return True
-            if k == pygame.K_v and self.mode == "ai":
-                self.view = VIEWS[(VIEWS.index(self.view) + 1) % 3]
-            elif k == pygame.K_1 and self.mode == "ai":
-                self.view = "red"
-            elif k == pygame.K_2 and self.mode == "ai":
-                self.view = "full"
-            elif k == pygame.K_3 and self.mode == "ai":
-                self.view = "blue"
-            elif k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
+            if k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
                 self.speed_i = min(len(SPEEDS) - 1, self.speed_i + 1)
             elif k in (pygame.K_MINUS, pygame.K_KP_MINUS):
                 self.speed_i = max(0, self.speed_i - 1)
@@ -708,6 +713,11 @@ class App:
                     self.human_blue_acts.pop()
                 elif k in (pygame.K_RETURN, pygame.K_SPACE):
                     self._human_blue_commit()
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.mode == "ai" and not self.online:
+            for v, r in view_rects().items():
+                if r.collidepoint(ev.pos):
+                    self._set_view(v)
+                    return True
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == "match" and self.phase == "think":
             if self.mode == "red" and self.pending_red is None:
                 targets = self._human_red_targets()
@@ -1080,7 +1090,7 @@ class App:
         if self.online:
             return [("C", "chat"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu"), ("M", "leave game")]
         if self.mode == "ai":
-            return [("SPACE", "play / pause"), ("N", "step one round"), ("V", "switch view"), ("+ -", "speed"),
+            return [("SPACE", "play / pause"), ("N", "step one round"), ("V", "view (or 1 2 3, click)"), ("+ -", "speed"),
                     ("R", "restart map"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu")]
         return [("R", "restart map"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu")]
 

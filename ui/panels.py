@@ -33,6 +33,17 @@ def blue_act_text(net, a):
 
 
 # -- top bar --------------------------------------------------------------------
+VIEW_ORDER = ("red", "full", "blue")
+VIEW_LABEL = {"red": "RED", "full": "FULL", "blue": "BLUE"}
+
+
+def view_rects():
+    """Screen rects of the RED / FULL / BLUE buttons in the top bar."""
+    seg_w = 64
+    x0 = T.W - 24 - seg_w * 3
+    return {v: pygame.Rect(x0 + i * seg_w, 17, seg_w, 30) for i, v in enumerate(VIEW_ORDER)}
+
+
 def draw_top(surf, match, view, speed, paused, mode_label, t):
     g, net = match.game, match.net
     pygame.draw.rect(surf, T.PAPER, (0, 0, T.W, T.TOP_H))
@@ -58,19 +69,16 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
         h = 14 if (i + 1) % 10 == 0 else 9
         pygame.draw.line(surf, T.INK if done else T.RULE, (x, 40 - h), (x, 40), 2)
 
-    # view switch: one segmented control
-    names = [("red", "RED"), ("full", "FULL"), ("blue", "BLUE")]
-    f = T.font(15, "semibold", display=True)
-    seg_w = 64
-    right = T.W - 24
-    box = pygame.Rect(right - seg_w * 3, 17, seg_w * 3, 30)
-    for i, (v, name) in enumerate(names):
-        r = pygame.Rect(box.x + i * seg_w, box.y, seg_w, box.h)
+    # view switch: one segmented control (clickable in AI vs AI, see view_rects)
+    rects = view_rects()
+    box = rects["red"].union(rects["blue"])
+    for i, v in enumerate(VIEW_ORDER):
+        r = rects[v]
         active = v == view
         col = {"red": T.RED, "blue": T.BLUE, "full": T.INK}[v]
         if active:
             pygame.draw.rect(surf, col, r)
-        fx.spaced(surf, name, r.center, 15, T.PAPER if active else T.INK_2, "semibold", 2, anchor="center")
+        fx.spaced(surf, VIEW_LABEL[v], r.center, 15, T.PAPER if active else T.INK_2, "semibold", 2, anchor="center")
         if i:
             pygame.draw.line(surf, T.INK, (r.x, r.y), (r.x, r.bottom - 1))
     pygame.draw.rect(surf, T.INK, box, 1)

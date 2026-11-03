@@ -61,6 +61,20 @@ def main():
         key(page, "Enter")                   # first menu item: AI VS AI
         page.wait_for_timeout(25000)
         page.screenshot(path=f"{OUT}/ai-match.png")
+        # view switching: number keys, then clicking the RED / FULL / BLUE buttons in the top bar
+        key(page, "1", wait=800)
+        key(page, "3", wait=800)
+        box = page.evaluate("(() => { const r = document.querySelector('canvas').getBoundingClientRect();"
+                            " return [r.x, r.y, r.width, r.height]; })()")
+        for x, label in ((1416, "red"), (1480, "full")):   # paper theme buttons, in game pixels (1600x900)
+            page.mouse.click(box[0] + x / 1600 * box[2], box[1] + 32 / 900 * box[3])
+            page.wait_for_timeout(800)
+        page.screenshot(path=f"{OUT}/ai-view-switch.png")
+        seen = [line for line in log if line.startswith("view: ")]
+        print("view switches:", seen)
+        if seen[-4:] != ["view: red", "view: blue", "view: red", "view: full"]:
+            ok = False
+            print("switching the view in AI vs AI did not work")
         print("---- AI vs AI console ----")
         print("\n".join(log[-40:]))
         if errors(log):
