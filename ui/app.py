@@ -521,21 +521,95 @@ class App:
         net = self.match.net
         return C.BLUE_AP - sum(C.action_cost(k, t, net.gateway) for k, t in self.human_blue_acts)
 
-    def _human_blue_add(self, node):
+    def _blue_refusal(self, tool, target):
+        """Why this Blue action can't be added right now, or None if it can."""
         g, net = self.match.game, self.match.net
+        cost = C.action_cost(tool, target, net.gateway)
+        ap = self._human_blue_ap()
+        if cost > ap:
+            what = "sealing GW" if tool == "restore" and target == net.gateway else tool.title()
+            return f"{what} needs {cost} AP, {ap} left"
+        if (tool, target) in self.human_blue_acts:
+            return "already chosen"
+        if tool == "isolate" and any(k == "isolate" for k, _ in self.human_blue_acts):
+            return "one isolate per turn"
+        if not g.blue_can(tool, target):
+            if tool == "isolate" and g.round < g.isolate_ready:
+                return f"isolate recharging (round {g.isolate_ready})"
+            if tool == "decoy" and len(g.decoys) >= C.MAX_DECOYS:
+                return f"all {C.MAX_DECOYS} decoys placed"
+            if tool == "patch" and target in g.patched:
+                return "already patched"
+            return "not allowed here"
+        return None
+
+    def _blue_can_do_anything(self):
+        """True if some action is still affordable and legal this turn (else the turn may as well end)."""
+        net = self.match.net
+        for tool in TOOLS:
+            targets = range(3) if tool == "monitor" else range(net.n)
+            if any(self._blue_refusal(tool, t) is None for t in targets):
+                return True
+        return False
+
+    def _human_blue_add(self, node):
+        net = self.match.net
         tool = self.human_tool
         target = net.zone[node] if tool == "monitor" else node
-        cost = C.action_cost(tool, target, net.gateway)
-        if cost > self._human_blue_ap() or not g.blue_can(tool, target):
-            self._fx(fx.FloatText(self.board.pts[node], "NOT ALLOWED", T.INK_2, 11))
+        why = self._blue_refusal(tool, target)
+        if why:
+            self._fx(fx.FloatText(self.board.pts[node], why.upper(), T.INK_2, 11))
             self.sound.play("fail")
-            return
-        if (tool, target) in self.human_blue_acts:
-            return
-        if tool == "isolate" and any(k == "isolate" for k, _ in self.human_blue_acts):
             return
         self.human_blue_acts.append((tool, target))
         self.sound.play("click")
+
+    # Blue's clickable tool bar along the top of the board (works without the keyboard, e.g. in a browser)
+    def _blue_bar_rects(self):
+        r = self.board.rect
+        names = TOOLS + ["end"]
+        w, h, gap = 118, 34, 6
+        x0 = r.centerx - (len(names) * w + (len(names) - 1) * gap) // 2
+        return [(n, pygame.Rect(x0 + i * (w + gap), r.y + 8, w, h)) for i, n in enumerate(names)]
+
+    def _blue_bar_click(self, pos):
+        for name, rect in self._blue_bar_rects():
+            if rect.collidepoint(pos):
+                if name == "end":
+                    self._human_blue_commit()
+                else:
+                    self.human_tool = name
+                self.sound.play("click")
+                return True
+        return False
+
+    def _draw_blue_bar(self, s):
+        ap = self._human_blue_ap()
+        mouse = pygame.mouse.get_pos()
+        keys = {"monitor": "Q", "patch": "W", "decoy": "E", "isolate": "A", "restore": "D", "end": "ENTER"}
+        stuck = not self._blue_can_do_anything()
+        for name, r in self._blue_bar_rects():
+            if name == "end":
+                hot = stuck or ap == 0
+                fill = T.BLUE if hot else T.PAPER
+                pygame.draw.rect(s, fill, r)
+                pygame.draw.rect(s, T.BLUE, r, 2)
+                col = T.PAPER if hot else T.BLUE
+                fx.text(s, f"END TURN  {ap} AP", (r.centerx, r.centery - 6), 13, col, "bold", anchor="center")
+                fx.text(s, keys[name], (r.centerx, r.centery + 9), 10, col, "medium", mono=True, anchor="center")
+                continue
+            cost = C.COST[name]
+            sel = name == self.human_tool
+            afford = cost <= ap
+            pygame.draw.rect(s, T.BLUE if sel else T.PAPER, r)
+            pygame.draw.rect(s, T.BLUE if (sel or r.collidepoint(mouse)) else T.RULE, r, 1)
+            col = T.PAPER if sel else (T.INK if afford else T.INK_3)
+            fx.text(s, name.title(), (r.x + 10, r.centery - 6), 13, col, "semibold", anchor="midleft")
+            fx.text(s, f"{keys[name]}  ·  {cost} AP", (r.x + 10, r.centery + 9), 10, col, "medium", mono=True,
+                    anchor="midleft")
+        if stuck:
+            fx.text(s, "Nothing else fits this turn: press Enter or END TURN", (self.board.rect.centerx,
+                    self.board.rect.bottom - 34), 13, T.BLUE, "semibold", anchor="center")
 
     def _human_blue_commit(self):
         self.pending_blue = list(self.human_blue_acts)
@@ -642,6 +716,8 @@ class App:
                     self.pending_red = targets[u]
                     self.sound.play("click")
             elif self.mode == "blue" and self.pending_blue is None:
+                if self._blue_bar_click(ev.pos):
+                    return True
                 u = self.board.node_at(ev.pos)
                 if u is not None:
                     self._human_blue_add(u)
@@ -846,7 +922,7 @@ class App:
             if isinstance(self.worker, _StepWorker) and self.phase_t > 0:
                 self.worker.step()            # browser: one agent per frame so the page stays responsive
             if (self.mode == "blue" and not self.settings["confirm_turn"] and self.pending_blue is None
-                    and self.human_blue_acts and self._human_blue_ap() == 0):
+                    and self.human_blue_acts and (self._human_blue_ap() == 0 or not self._blue_can_do_anything())):
                 self._human_blue_commit()
             min_think = 0.35 if self.mode == "ai" else 0.0
             can_go = (not self.paused) or self.step_once or self.mode != "ai"
@@ -912,6 +988,8 @@ class App:
         red_dbg = m.red_debug if self.mode != "red" else {}
         self.board.draw(s, g, self.view, self.t, red_dbg, m.blue_debug, hl, hover, monitored)
         screens.draw_pending(self, s)
+        if self.mode == "blue" and self.phase == "think" and self.pending_blue is None and self.state == "match":
+            self._draw_blue_bar(s)
         for e in self.effects:
             if self.view in getattr(e, "views", VIEWS):
                 if isinstance(e, fx.Flash):
@@ -976,8 +1054,8 @@ class App:
             lines.append((f"{'>' if sel else ' '} {keys[tool]}  {tool.title():8s} cost {cost}",
                           T.BLUE if sel else T.INK_2))
         lines.append(("", T.TEXT))
-        lines.append(("Click a node to use the tool.", T.TEXT))
-        end = "Enter: end turn" if self.settings["confirm_turn"] else "turn ends at 0 AP"
+        lines.append(("Pick a tool above the map, then click a node.", T.TEXT))
+        end = "Enter: end turn" if self.settings["confirm_turn"] else "Enter / auto at 0 AP"
         lines.append((f"Backspace: undo   {end}", T.TEXT))
         lines.append(("", T.TEXT))
         for k, t in self.human_blue_acts:
