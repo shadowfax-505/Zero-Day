@@ -1,0 +1,19 @@
+# Fly.io config for the Zero Day relay. From this folder:
+#   fly launch --copy-config --no-deploy   (pick a unique app name when asked)
+#   fly deploy
+app = "zero-day-relay"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

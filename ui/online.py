@@ -1,8 +1,11 @@
-"""Online lobby: host a game or join one on the same network (or by IP).
+"""Online lobby: host a game or join one, either directly on the same network
+(or by IP) or through the relay server with a four-letter room code.
 
 Rows are picked with Up/Down or the mouse; Left/Right flips a choice; text
-fields take typing while they are selected. Games announced on the LAN show up
-on the right and join with one click.
+fields take typing while they are selected. Games announced on the LAN (or
+waiting on the relay server) show up on the right and join with one click.
+The browser version can only use the relay, so it starts there and hides the
+direct options.
 """
 
 import json
@@ -10,10 +13,12 @@ import os
 import random
 import socket
 import threading
+import time
 
 import pygame
 
 from net.peer import DEFAULT_PORT, Beacon, Peer, Scanner, local_ip
+from net.relay import WEB, RelayPeer, default_relay_url, normalise_url, relay_override
 from net.session import Session
 from ui import theme as T     # rebound to the active skin's theme in Lobby.draw()
 
@@ -59,8 +64,20 @@ def _save_prefs(p):
         pass
 
 
+class _NoScanner:
+    """The browser can't listen for LAN broadcasts."""
+    ok = False
+    stop = False
+
+    @staticmethod
+    def games():
+        return []
+
+
 class Lobby:
-    ROWS = ["name", "side", "player", "host", "ip", "back"]
+    LAN_ROWS = ["name", "side", "player", "via", "host", "ip", "back"]
+    RELAY_ROWS = ["name", "side", "player", "via", "server", "rhost", "code", "back"]
+    LIST_EVERY = 2.0             # seconds between refreshes of the relay's open-games list
 
     def __init__(self, seed):
         p = _load_prefs()
@@ -69,22 +86,35 @@ class Lobby:
         self.local_ai = bool(p.get("local_ai", False))
         self.ip = p.get("ip", "")
         self.port = int(p.get("port", DEFAULT_PORT))
+        self.via = "relay" if WEB else p.get("via", "lan")
+        self.server = relay_override() or p.get("server") or default_relay_url()
+        self.code = ""
         self.seed = seed
-        self.sel = 3
+        self.sel = self.ROWS.index("rhost" if self.via == "relay" else "host")
         self.state = "setup"         # setup | hosting | joining
         self.status = ""
         self.status_col = "muted"
         self.session = None
         self.peer = None
         self.beacon = None
-        self.scanner = Scanner()
-        self.my_ip = local_ip()
+        self.relay = None            # RelayPeer while the relay is in use
+        self._relay_want = None      # ("create",) or ("join", code) to send once the relay connects
+        self._list_t = 0.0
+        self.scanner = _NoScanner() if WEB else Scanner()
+        self.my_ip = "" if WEB else local_ip()
         self._join_result = None
+        if self.via == "relay":
+            self._connect_relay()
+
+    @property
+    def ROWS(self):
+        rows = self.RELAY_ROWS if self.via == "relay" else self.LAN_ROWS
+        return [r for r in rows if not (WEB and r == "via")]
 
     # -- lifecycle --------------------------------------------------------------------
     def _prefs(self):
         _save_prefs({"name": self.name, "side": self.side, "local_ai": self.local_ai, "ip": self.ip,
-                     "port": self.port})
+                     "port": self.port, "via": self.via, "server": self.server})
 
     def close(self, keep_session=False):
         self.scanner.stop = True
@@ -95,17 +125,109 @@ class Lobby:
                 self.session.close()
             elif self.peer:
                 self.peer.close()
-        self.session = self.peer = self.beacon = None
+        if self.relay is not None and not (keep_session and self.peer is self.relay):
+            self.relay.close()
+        self.session = self.peer = self.beacon = self.relay = None
 
     def _cancel(self):
         if self.beacon:
             self.beacon.stop = True
-        if self.session:
+        if self.peer is self.relay and self.relay is not None:
+            # leave the room but keep the connection to the server for the games list
+            if self.session:
+                self.session.closed = True
+            if self.relay.paired:
+                self.relay.close()
+                self.relay = None
+            else:
+                self.relay.leave()
+        elif self.session:
             self.session.close()
         elif self.peer:
             self.peer.close()
         self.session = self.peer = self.beacon = None
+        self._relay_want = None
         self.state = "setup"
+
+    # -- relay ------------------------------------------------------------------------
+    def _connect_relay(self):
+        if self.relay is not None and not self.relay.closed and self.relay.url == normalise_url(self.server):
+            return
+        if self.relay is not None:
+            self.relay.close()
+        try:
+            self.relay = RelayPeer(self.server)
+        except Exception as e:  # noqa: BLE001 - e.g. no WebSocket support at all
+            self.relay = None
+            self._error(f"Could not open a connection to the server: {e}")
+            return
+        self._list_t = 0.0
+
+    def _relay_host(self):
+        self._prefs()
+        self._connect_relay()
+        if self.relay is None:
+            return
+        self._relay_want = ("create",)
+        self.peer = self.relay
+        self.state = "hosting"
+        self.status = ""
+
+    def _relay_join(self, code):
+        code = code.strip().upper()
+        if len(code) != 4:
+            self._error("Type the four-letter code shown on the host's screen.")
+            return
+        self._prefs()
+        self._connect_relay()
+        if self.relay is None:
+            return
+        self._relay_want = ("join", code)
+        self.peer = self.relay
+        self.state = "joining"
+        self.status = f"Joining game {code}..."
+        self.status_col = "muted"
+
+    def _relay_update(self):
+        r = self.relay
+        if r is None:
+            return
+        r.update()
+        if r.closed:
+            why = r.error or "Lost the connection to the server."
+            self.relay = None
+            if self.state != "setup":
+                self._cancel()
+            self._error(why)
+            return
+        if not r.connected:
+            return
+        if self._relay_want:
+            want, self._relay_want = self._relay_want, None
+            if want[0] == "create":
+                r.create(self.name, self.side)
+            else:
+                r.join(want[1])
+        if r.notices:
+            why = r.notices.pop(0)
+            if self.state != "setup":
+                self.state = "setup"
+                self.peer = None
+            self._error(why)
+        if self.state == "setup" and time.time() - self._list_t > self.LIST_EVERY:
+            self._list_t = time.time()
+            r.list_rooms()
+
+    def server_status(self):
+        r = self.relay
+        if r is None:
+            return "not connected", "muted"
+        if r.connected:
+            return "connected", "ok"
+        if r.connecting:
+            wait = time.time() - r.started
+            return ("waking the server up (up to a minute)..." if wait > 4 else "connecting..."), "muted"
+        return "not connected", "muted"
 
     def _host(self):
         self._prefs()
@@ -145,6 +267,8 @@ class Lobby:
 
     def update(self):
         """Returns a ready Session once a match can begin."""
+        if self.via == "relay" or self.relay is not None:
+            self._relay_update()
         if self.state != "joining" and isinstance(self._join_result, Peer):
             self._join_result.close()            # a join that finished after it was cancelled
             self._join_result = None
@@ -157,6 +281,10 @@ class Lobby:
             self.peer = res
             self.session = Session(self.peer, "client", self.name, local_ai=self.local_ai)
             self.status = "Connected. Waiting for the host to start..."
+        if self.state == "joining" and self.session is None and self.peer is not None \
+                and self.peer is self.relay and self.relay.accepted():
+            self.session = Session(self.peer, "client", self.name, local_ai=self.local_ai)
+            self.status = "Joined. Waiting for the host to start..."
         if self.state == "hosting" and self.peer and self.peer.accepted() and self.session is None:
             self.session = Session(self.peer, "host", self.name, side=self.side, local_ai=self.local_ai)
         if self.session is None:
@@ -176,6 +304,9 @@ class Lobby:
 
     # -- input --------------------------------------------------------------------------
     def _rows(self):
+        if self.via == "relay":
+            games = self.relay.rooms if self.relay is not None and self.relay.connected else []
+            return self.ROWS + [("room", g) for g in games]
         return self.ROWS + [("game", g) for g in self.scanner.games()]
 
     def handle(self, ev):
@@ -195,12 +326,14 @@ class Lobby:
             if k in (pygame.K_UP, pygame.K_DOWN, pygame.K_TAB):
                 step = -1 if k == pygame.K_UP or (k == pygame.K_TAB and ev.mod & pygame.KMOD_SHIFT) else 1
                 self.sel = (self.sel + step) % len(rows)
-            elif k in (pygame.K_LEFT, pygame.K_RIGHT) and row in ("side", "player"):
+            elif k in (pygame.K_LEFT, pygame.K_RIGHT) and row in ("side", "player", "via"):
                 self._flip(row)
             elif k in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 return self._activate(row)
-            elif row in ("name", "ip"):
+            elif row in ("name", "ip", "server", "code"):
                 self._type(row, ev)
+            if k == pygame.K_v and ev.mod & (pygame.KMOD_CTRL | pygame.KMOD_META) and row in ("ip", "server", "code"):
+                self._paste(row)
         elif ev.type == pygame.MOUSEMOTION:
             for i, r in enumerate(self._row_rects(len(rows))):
                 if r.collidepoint(ev.pos):
@@ -210,15 +343,24 @@ class Lobby:
                 if r.collidepoint(ev.pos):
                     self.sel = i
                     row = rows[i]
-                    if row in ("side", "player"):
+                    if row in ("side", "player", "via"):
                         self._flip(row)
-                    elif row not in ("name",):
+                    elif row not in ("name", "server") and not (row == "code" and len(self.code) != 4):
                         return self._activate(row)
         return None
 
     def _flip(self, row):
         if row == "side":
             self.side = "blue" if self.side == "red" else "red"
+        elif row == "via":
+            self.via = "lan" if self.via == "relay" else "relay"
+            self.status = ""
+            if self.via == "relay":
+                self._connect_relay()
+            elif self.relay is not None:
+                self.relay.close()
+                self.relay = None
+            self._prefs()
         else:
             self.local_ai = not self.local_ai
 
@@ -229,25 +371,63 @@ class Lobby:
             self._host()
         elif row == "ip":
             self._join(self.ip, self.port)
-        elif row in ("side", "player"):
+        elif row == "rhost":
+            self._relay_host()
+        elif row == "code":
+            self._relay_join(self.code)
+        elif row == "server":
+            self._prefs()
+            self._connect_relay()
+        elif row in ("side", "player", "via"):
             self._flip(row)
+        elif isinstance(row, tuple) and row[0] == "room":
+            self._relay_join(row[1][0])
         elif isinstance(row, tuple):
             ip, port, _, _ = row[1]
             self._join(ip, port)
         return None
 
+    def _paste(self, row):
+        try:
+            if not pygame.scrap.get_init():
+                pygame.scrap.init()
+            text = pygame.scrap.get_text() or ""
+        except (pygame.error, AttributeError, NotImplementedError):
+            return
+        text = text.strip().splitlines()[0] if text.strip() else ""
+        if row == "ip":
+            self.ip = text[:40]
+        elif row == "server":
+            self.server = text[:80]
+        else:
+            self.code = "".join(c for c in text.upper() if c.isalpha())[:4]
+
     def _type(self, row, ev):
-        cur = self.name if row == "name" else self.ip
+        cur = {"name": self.name, "ip": self.ip, "server": self.server, "code": self.code}[row]
+        limit = {"name": 16, "ip": 40, "server": 80, "code": 4}[row]
         if ev.key == pygame.K_BACKSPACE:
             cur = cur[:-1]
-        elif ev.unicode and ev.unicode.isprintable():
-            ok = ev.unicode.isalnum() or ev.unicode in " _-" if row == "name" else ev.unicode in "0123456789.:abcdefghijklmnopqrstuvwxyz-"
-            if ok and len(cur) < (16 if row == "name" else 40):
-                cur += ev.unicode
+        elif ev.unicode and ev.unicode.isprintable() and not ev.mod & (pygame.KMOD_CTRL | pygame.KMOD_META):
+            ch = ev.unicode
+            if row == "name":
+                ok = ch.isalnum() or ch in " _-"
+            elif row == "ip":
+                ok = ch in "0123456789.:abcdefghijklmnopqrstuvwxyz-"
+            elif row == "server":
+                ok = ch.isalnum() or ch in ".:/-_?=&%"
+            else:
+                ch = ch.upper()
+                ok = ch.isalpha()
+            if ok and len(cur) < limit:
+                cur += ch
         if row == "name":
             self.name = cur
-        else:
+        elif row == "ip":
             self.ip = cur
+        elif row == "server":
+            self.server = cur
+        else:
+            self.code = cur
 
     # -- drawing --------------------------------------------------------------------------
     X0 = 110
@@ -274,7 +454,12 @@ class Lobby:
         hint = ("Up / Down: choose    Left / Right: change    Type to edit    Enter: go    Esc: back"
                 if self.state == "setup" else "Esc: cancel")
         fx.text(s, hint, (T.W - 60, T.H - 30), 13, T.INK_3, "regular", mono=True, anchor="midright")
-        fx.text(s, f"This computer: {self.my_ip}", (x0, T.H - 30), 14, T.INK_2, "regular", anchor="midleft")
+        if self.via == "relay":
+            st, kind = self.server_status()
+            fx.text(s, f"Server: {st}", (x0, T.H - 30), 14, T.BLUE if kind == "ok" else T.INK_2, "regular",
+                    anchor="midleft")
+        else:
+            fx.text(s, f"This computer: {self.my_ip}", (x0, T.H - 30), 14, T.INK_2, "regular", anchor="midleft")
 
     def _draw_setup(self, s, t):
         rows = self._rows()
@@ -295,12 +480,26 @@ class Lobby:
                         "medium", mono=True, anchor="midright")
             fx.hrule(s, r.x, r.right, r.bottom + 4, T.RULE)
 
-        # games found on the network
+        # games found on the network (or waiting on the relay server)
         gx = 860
-        fx.spaced(s, "GAMES ON YOUR NETWORK", (gx, 262), 17, T.INK, "bold", 2)
+        fx.spaced(s, "OPEN GAMES ON THE SERVER" if self.via == "relay" else "GAMES ON YOUR NETWORK", (gx, 262), 17,
+                  T.INK, "bold", 2)
         fx.hrule(s, gx, gx + 630, 288, T.INK, 2)
         games = [r for r in rows if isinstance(r, tuple)]
-        if not games:
+        if not games and self.via == "relay":
+            st, _ = self.server_status()
+            if st == "connected":
+                fx.text(s, "No one is waiting for an opponent right now.", (gx, 306), 16, T.INK_2, "regular")
+            else:
+                dots = "." * (1 + int(t * 2) % 3)
+                fx.text(s, f"Server: {st.rstrip('.')}{dots}", (gx, 306), 16, T.INK_2, "regular")
+            fx.text(s, "HOST A GAME gives you a four-letter code. Send it to your opponent;", (gx, 336), 14,
+                    T.INK_3, "regular")
+            fx.text(s, "they type it in JOIN BY CODE, or click your game when it shows up here.", (gx, 358), 14,
+                    T.INK_3, "regular")
+            fx.text(s, "Works between browsers and desktop copies, on any network.", (gx, 380), 14, T.INK_3,
+                    "regular")
+        elif not games:
             dots = "." * (1 + int(t * 2) % 3)
             fx.text(s, f"Looking for hosts{dots}", (gx, 306), 16, T.INK_2, "regular")
             fx.text(s, "When a friend on the same Wi-Fi hosts a game it appears here.", (gx, 336), 14, T.INK_3,
@@ -315,7 +514,12 @@ class Lobby:
             if not isinstance(row, tuple):
                 continue
             r = rects[i]
-            ip, port, name, side = row[1]
+            if row[0] == "room":
+                code, name, side = row[1]
+                where = f"code {code}"
+            else:
+                ip, port, name, side = row[1]
+                where = f"{ip}:{port}"
             sel = i == self.sel
             if sel:
                 pygame.draw.rect(s, T.PAPER_3, r)
@@ -323,7 +527,7 @@ class Lobby:
             pygame.draw.rect(s, col, (r.x, r.y, 5, r.h))
             fx.text(s, name, (r.x + 18, r.centery), 20, T.INK, "semibold", anchor="midleft")
             you = "BLUE" if side == "red" else "RED"
-            fx.text(s, f"{ip}:{port}   you play {you}", (r.right - 16, r.centery), 14, T.INK_2, "regular",
+            fx.text(s, f"{where}   you play {you}", (r.right - 16, r.centery), 14, T.INK_2, "regular",
                     mono=True, anchor="midright")
             fx.hrule(s, r.x, r.right, r.bottom + 4, T.RULE)
 
@@ -339,8 +543,20 @@ class Lobby:
                 (T.RED if self.side == "red" else T.BLUE)
         if row == "player":
             return "WHO PLAYS IT", f"< {'MY AI' if self.local_ai else 'ME'} >", T.INK
+        if row == "via":
+            return "CONNECT", f"< {'THROUGH THE SERVER' if self.via == 'relay' else 'SAME NETWORK / IP'} >", T.INK
         if row == "host":
             return "HOST A GAME", f"port {self.port}", T.INK
+        if row == "rhost":
+            return "HOST A GAME", "get a code", T.INK
+        if row == "server":
+            shown = self.server + (caret if sel else "")
+            if not sel and len(shown) > 34:
+                shown = shown.split("://")[-1][:31] + "..."
+            return "SERVER", shown[-40:], T.INK
+        if row == "code":
+            shown = self.code + (caret if sel else "")
+            return "JOIN BY CODE", shown or "type code", T.INK
         if row == "ip":
             shown = self.ip + (caret if sel else "")
             return "JOIN BY IP", shown or "type IP", T.INK
@@ -351,7 +567,30 @@ class Lobby:
         y = 300
         dots = "." * (1 + int(t * 2) % 3)
         fx.hrule(s, x0, T.W - 60, y - 12, T.INK, 2)
-        if self.state == "hosting":
+        if self.state == "hosting" and self.via == "relay":
+            col = T.RED if self.side == "red" else T.BLUE
+            code = self.relay.code if self.relay is not None else None
+            if code is None:
+                st, _ = self.server_status()
+                fx.spaced(s, f"OPENING A GAME{dots}", (x0, y + 10), 34, T.INK, "bold", 2)
+                fx.text(s, f"Server: {st}", (x0, y + 80), 18, T.INK_2, "regular")
+                fx.text(s, "A free server sleeps when nobody uses it; the first visit can take up to a minute.",
+                        (x0, y + 106), 15, T.INK_3, "regular")
+                return
+            fx.spaced(s, f"WAITING FOR AN OPPONENT{dots}", (x0, y + 10), 34, T.INK, "bold", 2)
+            fx.text(s, "Send your opponent this code. They open PLAY ONLINE, pick THROUGH THE SERVER",
+                    (x0, y + 80), 18, T.INK_2, "regular")
+            fx.text(s, "and type it in JOIN BY CODE (or click your game in their list).", (x0, y + 106), 18,
+                    T.INK_2, "regular")
+            box = pygame.Rect(x0, y + 150, 360, 110)
+            pygame.draw.rect(s, T.PAPER, box)
+            pygame.draw.rect(s, T.INK, box, 2)
+            fx.text(s, " ".join(code), (box.centerx, box.centery), 64, T.INK, "semibold", mono=True,
+                    anchor="center")
+            fx.spaced(s, f"YOU PLAY {'RED' if self.side == 'red' else 'BLUE'}"
+                      + ("  (YOUR AI)" if self.local_ai else ""), (x0, y + 290), 20, col, "bold", 2)
+            fx.text(s, f"Map {self.seed}.", (x0, y + 330), 14, T.INK_3, "regular")
+        elif self.state == "hosting":
             col = T.RED if self.side == "red" else T.BLUE
             fx.spaced(s, f"WAITING FOR AN OPPONENT{dots}", (x0, y + 10), 34, T.INK, "bold", 2)
             fx.text(s, "Ask your opponent to open PLAY ONLINE. Your game shows up on their screen if you are",

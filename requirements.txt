@@ -1,3 +1,4 @@
 pygame-ce>=2.4
 numpy>=1.24
 matplotlib>=3.7   # only for experiments/charts.py and the GA fitness plot
+websockets>=13    # online play through the relay server (net/relay.py)

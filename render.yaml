@@ -1,0 +1,13 @@
+# Render Blueprint: deploys the Zero Day relay server (server/relay.py) as a free web service.
+# Render dashboard -> New -> Blueprint -> pick this repo. The relay URL is then
+# wss://<service-name>.onrender.com
+services:
+  - type: web
+    name: zero-day-relay
+    runtime: python
+    plan: free
+    rootDir: server
+    buildCommand: pip install -r requirements.txt
+    startCommand: python relay.py
+    healthCheckPath: /
+    autoDeploy: true
