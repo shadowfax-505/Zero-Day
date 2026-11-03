@@ -68,7 +68,7 @@ def draw_menu(app, s):
 
 
 def menu_rects(app):
-    return [pygame.Rect(T.W // 2 - 170, 450 + i * 54, 340, 44) for i in range(len(app._menu_items()))]
+    return [pygame.Rect(T.W // 2 - 170, 446 + i * 48, 340, 40) for i in range(len(app._menu_items()))]
 
 
 def draw_pending(app, s):

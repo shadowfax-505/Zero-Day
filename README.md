@@ -35,6 +35,9 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `python main.py --mode red` | You play Red against the Blue AI |
 | `python main.py --mode blue` | You play Blue against the Red AI |
 | `python main.py --mode ai --seed 42 --record frames` | Saves every frame (30 fps) for the gameplay video |
+| `python main.py --host --side red` | Host an online game as Red and wait for someone to join |
+| `python main.py --join 192.168.1.20` | Join the online game hosted on that computer |
+| `python main.py --join 192.168.1.20 --ai` | Join, but let your AI play your side |
 | `python main.py --theme dark` | Starts in the dark (original neon) theme |
 
 ### Controls (AI vs AI)
@@ -80,6 +83,24 @@ when its action points run out, and sound effects with volume.
 | Paper (default) | Dark |
 | --- | --- |
 | ![Paper theme](docs/screenshots/full-view.png) | ![Dark theme](docs/screenshots/dark-view.png) |
+
+### Online play
+
+Pick **PLAY ONLINE** in the menu. One player chooses **HOST A GAME**; the other sees that game under
+*Games on your network* and clicks it (or types the host's address in **JOIN BY IP**). The host picks
+the sides and the joiner gets the other one. Each player only ever sees their own side's view, so the fog
+of war is real: Red never sees Blue's moves and Blue only sees alerts.
+
+**WHO PLAYS IT** decides whether you play or your AI plays for you, so the same screen covers human vs
+human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat. After a match the
+host presses `R` (same map) or `N` (new map); the joiner's `R` / `N` asks the host for a rematch.
+
+How it works: both computers build the same map from the shared seed and the engine's dice are seeded
+from it too, so only the two moves travel over the network each round (one line of JSON over TCP, port
+5150). Every move carries a short fingerprint of the sender's game state, so a mismatch is caught at once.
+Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
+internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.
+If a firewall prompt appears the first time you host, allow it.
 
 ---
 
@@ -201,9 +222,10 @@ agents/red/      astar.py, ismcts.py, opponent_model.py, agent.py
 agents/blue/     particle_filter.py, fuzzy.py, stackelberg.py, agent.py
 agents/baseline/ random agents for both sides
 tuning/          ga.py, best_weights.json, fitness curve
-ui/              Pygame app: menu, network renderer, panels, effects, human input
+ui/              Pygame app: menu, online lobby, network renderer, panels, effects, human input
+net/             online play: TCP link, LAN discovery, lockstep match protocol
 experiments/     headless batch runner, charts, results
-tests/           engine and observation checks (python -m pytest -q)
+tests/           engine, observation and online lockstep checks (python -m pytest -q)
 ```
 
 ## Balancing notes
