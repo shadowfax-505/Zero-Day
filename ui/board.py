@@ -1,8 +1,8 @@
 """Network renderer: zones, links, nodes, Red's route, Blue's belief map and
-per-view fog of war."""
+per-view fog of war. Drawn like a printed map: ink shapes on paper, one shape
+per node type, hatching for what Red has not seen."""
 
 import math
-import random
 
 import pygame
 
@@ -14,6 +14,8 @@ from ui import theme as T
 VIEWS = ["red", "full", "blue"]
 VIEW_NAMES = {"red": "RED'S VIEW", "full": "FULL VIEW", "blue": "BLUE'S VIEW"}
 
+FOG_R = 64
+
 
 class Board:
     def __init__(self, net, rect=T.BOARD):
@@ -23,16 +25,13 @@ class Board:
         self.inner = rect.inflate(-2 * pad_x, -2 * pad_y)
         self.inner.y += 10
         self.pts = [self.to_screen(p) for p in net.pos]
-        self.pulses = []
-        self.rng = random.Random(net.seed)
-        self.particle_jitter = [(self.rng.uniform(-1, 1), self.rng.uniform(-1, 1)) for _ in range(600)]
         self.zone_rects = []
         for z, (x0, x1) in enumerate(ZONE_X):
             a = self.to_screen((x0 - 0.035, 0.02))
             b = self.to_screen((x1 + 0.035, 0.98))
             self.zone_rects.append(pygame.Rect(a[0], a[1] - 18, b[0] - a[0], b[1] - a[1] + 18))
         self.edges = list(net.edges())
-        self._static = None
+        self._fog_key = None
 
     def to_screen(self, p):
         return (int(self.inner.x + p[0] * self.inner.w), int(self.inner.y + p[1] * self.inner.h))
@@ -49,7 +48,7 @@ class Board:
 
     def radius(self, u):
         k = self.net.kind[u]
-        return 19 if k == "database" else 15 if k == "gateway" else 12 if k == "bridge" else 11
+        return 17 if k == "database" else 14 if k == "gateway" else 10 if k == "bridge" else 8
 
     # -- drawing -------------------------------------------------------------------
     def draw(self, surf, g, view, t, red_dbg=None, blue_dbg=None, highlight=(), hover=None, monitored_preview=()):
@@ -63,7 +62,12 @@ class Board:
         if view == "red":
             known_edges = {frozenset((u, v)) for u, vs in g.red_known_edges.items() for v in vs}
 
-        self._draw_zones(surf, g, view, t, monitored_preview)
+        self._draw_plate(surf)
+        self._draw_zones(surf, view, monitored_preview)
+
+        # Blue's belief: flat discs sized and shaded by probability, particles as dots
+        if show_blue and blue_dbg.get("belief") is not None:
+            self._draw_belief(surf, blue_dbg, t)
 
         # links
         for u, v in self.edges:
@@ -74,189 +78,219 @@ class Board:
             gate = e in net.gates
             opened = e in g.open_gates
             held_both = show_red and u in g.red_held and v in g.red_held
-            if held_both:
-                col = T.scale(T.RED, 0.55)
-                pygame.draw.line(surf, col, a, b, 3)
-            elif gate and not opened:
-                fx.dashed_line(surf, T.scale(T.EDGE_LIT, 0.9), a, b, 2, 6, 5)
+            if held_both or (gate and opened and show_red):
+                pygame.draw.line(surf, T.RED, a, b, 3)
+            elif gate:
+                fx.dashed_line(surf, T.INK_2, a, b, 2, 7, 5)
             else:
-                pygame.draw.line(surf, T.EDGE if not gate else T.EDGE_LIT, a, b, 2)
+                pygame.draw.line(surf, T.EDGE, a, b, 1)
             if gate:
                 m = ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2)
-                lock_col = T.RED_SOFT if opened and show_red else T.BLUE_SOFT
-                pygame.draw.circle(surf, T.BG, m, 6)
-                pygame.draw.circle(surf, lock_col, m, 6, 2)
-                if not opened:
-                    pygame.draw.line(surf, lock_col, (m[0] - 2, m[1]), (m[0] + 2, m[1]), 2)
+                col = T.RED if opened and show_red else T.INK
+                r = pygame.Rect(0, 0, 11, 11)
+                r.center = m
+                pygame.draw.rect(surf, T.PAPER, r)
+                pygame.draw.rect(surf, col, r, 2)
+                if not (opened and show_red):
+                    pygame.draw.rect(surf, col, r.inflate(-6, -6))
 
-        self._draw_pulses(surf, known_edges, t)
         if view == "red":
-            self._draw_fog(surf, visible, t)
-
-        # Blue's belief: halos and particles
-        if show_blue and blue_dbg.get("belief") is not None:
-            b = blue_dbg["belief"]
-            for u in range(net.n):
-                if b[u] > 0.01:
-                    fx.blit_glow(surf, self.pts[u], int(26 + 70 * min(1.0, b[u] * 1.6)), T.BLUE, 0.35 + 0.9 * min(1.0, b[u] * 2))
-            parts = blue_dbg.get("particles")
-            if parts is not None:
-                for i, u in enumerate(parts[:600]):
-                    jx, jy = self.particle_jitter[i % len(self.particle_jitter)]
-                    wob = math.sin(t * 2 + i) * 3
-                    p = self.pts[int(u)]
-                    surf.set_at((int(p[0] + jx * 20 + wob), int(p[1] + jy * 20)), T.BLUE_SOFT)
+            self._draw_fog(surf, visible)
 
         # Red's planned route
         if show_red and red_dbg.get("route"):
             route = red_dbg["route"]
             for i in range(len(route) - 1):
-                fx.dashed_line(surf, T.RED, self.pts[route[i]], self.pts[route[i + 1]], 3, 10, 7, offset=-t * 40)
+                fx.dashed_line(surf, T.RED, self.pts[route[i]], self.pts[route[i + 1]], 3, 9, 6, offset=-t * 30)
             if not red_dbg.get("reaches_db") and route:
-                fx.dashed_line(surf, T.scale(T.RED, 0.45), self.pts[route[-1]], self.pts[net.database], 1, 3, 7,
-                               offset=-t * 25)
+                fx.dashed_line(surf, T.fade(T.RED, 0.45), self.pts[route[-1]], self.pts[net.database], 1, 2, 6,
+                               offset=-t * 20)
 
         # nodes
         for u in range(net.n):
             if u not in visible:
                 continue
-            self._draw_node(surf, g, u, view, t, show_red, show_blue, u in highlight, u == hover, red_dbg)
+            self._draw_node(surf, g, u, view, t, show_red, show_blue, u in highlight, u == hover)
 
         # last round's alerts (Blue sees these, never whether they are real)
         if show_blue and g.history:
             for u, strength, real in g.history[-1].alerts:
                 p = self.pts[u]
-                x, y = p[0] + self.radius(u) + 4, p[1] - self.radius(u) - 4
-                col = T.AMBER if (real or view == "blue") else T.DIM
-                pygame.draw.polygon(surf, col, [(x, y - 8), (x + 7, y + 5), (x - 7, y + 5)])
-                fx.text(surf, "!", (x, y + 1), 10, T.BG, "black", anchor="center")
+                r = self.radius(u)
+                c = (p[0] + r + 5, p[1] - r - 5)
+                col = T.ALERT if (real or view == "blue") else T.INK_3
+                pygame.draw.circle(surf, T.PAPER, c, 9)
+                pygame.draw.circle(surf, col, c, 8)
+                fx.text(surf, "!", (c[0] + 1, c[1]), 13, T.PAPER, "bold", anchor="center")
 
-        # Red's marker
+        # Red's marker: a pin above its node
         if show_red and g.winner != "blue":
             p = self.pts[g.red_pos]
-            pulse = 0.5 + 0.5 * math.sin(t * 5)
-            fx.blit_glow(surf, p, int(40 + 10 * pulse), T.RED, 1.1)
-            pygame.draw.circle(surf, T.RED, p, int(self.radius(g.red_pos) + 7 + 3 * pulse), 2)
-            # chevron above
-            x, y = p[0], p[1] - self.radius(g.red_pos) - 16 - 3 * pulse
-            pygame.draw.polygon(surf, T.RED, [(x - 7, y - 6), (x + 7, y - 6), (x, y + 2)])
+            r = self.radius(g.red_pos)
+            pygame.draw.circle(surf, T.RED, p, r + 6, 2)
+            bob = 2 * math.sin(t * 3)
+            x, y = p[0], p[1] - r - 12 + bob
+            pygame.draw.polygon(surf, T.RED, [(x - 8, y - 12), (x + 8, y - 12), (x, y)])
+            pygame.draw.polygon(surf, T.PAPER, [(x - 8, y - 12), (x + 8, y - 12), (x, y)], 1)
 
-    def _draw_zones(self, surf, g, view, t, monitored_preview):
-        mon = set(monitored_preview)
+    def _draw_plate(self, surf):
+        """The map sheet: faint grid with a frame and corner ticks."""
+        if getattr(self, "_plate", None) is None:
+            r = self.rect
+            plate = pygame.Surface(r.size)
+            plate.fill(T.PAPER)
+            for x in range(0, r.w, 32):
+                pygame.draw.line(plate, T.GRID, (x, 0), (x, r.h))
+            for y in range(0, r.h, 32):
+                pygame.draw.line(plate, T.GRID, (0, y), (r.w, y))
+            pygame.draw.rect(plate, T.INK_3, plate.get_rect(), 1)
+            for cx, cy, dx, dy in ((0, 0, 1, 1), (r.w - 1, 0, -1, 1), (0, r.h - 1, 1, -1), (r.w - 1, r.h - 1, -1, -1)):
+                pygame.draw.line(plate, T.INK, (cx, cy), (cx + 14 * dx, cy), 2)
+                pygame.draw.line(plate, T.INK, (cx, cy), (cx, cy + 14 * dy), 2)
+            self._plate = plate
+        surf.blit(self._plate, self.rect.topleft)
+
+    def _zone_fill(self, u, view):
+        """Colour under a node's label, so labels sit on a clean patch over the links."""
+        if view != "red" and self.net.zone[u] in self._watched:
+            return T.mix(T.PAPER_2, T.BLUE, 22 / 255)
+        return T.PAPER_2
+
+    def _draw_zones(self, surf, view, monitored_preview):
+        mon = set(monitored_preview) if view != "red" else set()
+        self._watched = mon
         for z, r in enumerate(self.zone_rects):
-            s = pygame.Surface(r.size, pygame.SRCALPHA)
-            pygame.draw.rect(s, (*T.ZONE_TINT[z], 46), s.get_rect(), border_radius=18)
-            if z in mon and view != "red":
-                a = int(90 + 60 * math.sin(t * 4))
-                pygame.draw.rect(s, (*T.BLUE, a), s.get_rect(), 2, border_radius=18)
+            watched = z in mon
+            if watched:
+                s = pygame.Surface(r.size, pygame.SRCALPHA)
+                s.fill((*T.BLUE, 22))
+                surf.blit(s, r.topleft)
+                pygame.draw.rect(surf, T.BLUE, r, 2)
             else:
-                pygame.draw.rect(s, (*T.ZONE_TINT[z], 140), s.get_rect(), 1, border_radius=18)
-            surf.blit(s, r.topleft)
-            label = f"ZONE {z + 1} · {C.ZONE_NAMES[z]}"
-            fx.spaced(surf, label, (r.x + 16, r.y + 10), 11, T.MUTED, "semibold", 2)
-            if z in mon and view != "red":
-                fx.spaced(surf, "MONITORED", (r.centerx, r.bottom - 12), 10, T.BLUE_SOFT, "bold", 3,
-                          anchor="midbottom")
+                pygame.draw.rect(surf, T.PAPER_2, r)
+                pygame.draw.rect(surf, T.RULE, r, 1)
+            fx.text(surf, f"{z + 1:02d}", (r.x + 12, r.y + 7), 15, T.INK_3, "semibold", display=True)
+            fx.spaced(surf, C.ZONE_NAMES[z], (r.x + 36, r.y + 7), 15, T.INK_2, "semibold", 2)
+            if watched:
+                fx.spaced(surf, "MONITORED", (r.right - 12, r.y + 7), 15, T.BLUE, "bold", 2, anchor="topright")
 
-    def _draw_fog(self, surf, visible, t):
-        """Fog of war over everything Red has not seen yet."""
+    def _draw_belief(self, surf, blue_dbg, t):
+        b = blue_dbg["belief"]
+        ox, oy = self.rect.topleft
+        layer = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+        for u in range(self.net.n):
+            if b[u] > 0.01:
+                k = min(1.0, b[u] * 1.8)
+                p = self.pts[u]
+                pygame.draw.circle(layer, (*T.BLUE, int(36 + 80 * k)), (p[0] - ox, p[1] - oy), int(16 + 30 * k))
+        surf.blit(layer, (ox, oy))
+        parts = blue_dbg.get("particles")
+        if parts is not None:
+            n = min(240, len(parts))
+            for i in range(n):
+                u = int(parts[i])
+                a = (i * 2.399963) % (2 * math.pi)          # golden-angle spread around the node
+                rad = 6 + 18 * math.sqrt((i % 37) / 37)
+                p = self.pts[u]
+                surf.fill(T.BLUE_DARK, (int(p[0] + math.cos(a) * rad), int(p[1] + math.sin(a) * rad), 2, 2))
+
+    def _draw_fog(self, surf, visible):
+        """Hatched fog over everything Red has not seen, with clean cut-outs."""
         key = frozenset(visible)
-        if getattr(self, "_fog_key", None) != key:
+        if self._fog_key != key:
             self._fog_key = key
             fog = pygame.Surface(self.rect.size, pygame.SRCALPHA)
-            fog.fill((6, 11, 26, 215))
-            hole = pygame.Surface((240, 240), pygame.SRCALPHA)
-            hole.fill((6, 11, 26, 215))
-            for i in range(120, 0, -3):
-                a = int(215 * (i / 120) ** 1.6)
-                pygame.draw.circle(hole, (6, 11, 26, a), (120, 120), i)
+            fog.fill((*T.PAPER_3, 250))
+            fx.hatch(fog, fog.get_rect(), (*T.RULE, 255), 9, 1)
+            ox, oy = self.rect.topleft
             for u in visible:
                 p = self.pts[u]
-                fog.blit(hole, (p[0] - self.rect.x - 120, p[1] - self.rect.y - 120),
-                         special_flags=pygame.BLEND_RGBA_MIN)
+                pygame.draw.circle(fog, (*T.INK_3, 255), (p[0] - ox, p[1] - oy), FOG_R + 2)
+            for u in visible:
+                p = self.pts[u]
+                pygame.draw.circle(fog, (0, 0, 0, 0), (p[0] - ox, p[1] - oy), FOG_R)
             self._fog = fog
         surf.blit(self._fog, self.rect.topleft)
-        fx.spaced(surf, "FOG OF WAR", (self.rect.right - 20, self.rect.bottom - 14), 10, T.DIM, "bold", 3,
-                  anchor="bottomright")
+        fx.tag(surf, "UNEXPLORED", (self.rect.right - 60, self.rect.bottom - 18), T.INK_2, 13)
 
-    def _draw_pulses(self, surf, known_edges, t):
-        if self.rng.random() < 0.25 and len(self.pulses) < 26:
-            u, v = self.rng.choice(self.edges)
-            if self.rng.random() < 0.5:
-                u, v = v, u
-            self.pulses.append([u, v, 0.0, self.rng.uniform(0.4, 0.9)])
-        keep = []
-        for p in self.pulses:
-            p[2] += p[3] / 60
-            if p[2] < 1:
-                keep.append(p)
-            if known_edges is not None and frozenset((p[0], p[1])) not in known_edges:
-                continue
-            a, b = self.pts[p[0]], self.pts[p[1]]
-            x, y = a[0] + (b[0] - a[0]) * p[2], a[1] + (b[1] - a[1]) * p[2]
-            fx.blit_glow(surf, (int(x), int(y)), 7, T.EDGE_LIT, 0.9)
-        self.pulses = keep
-
-    def _draw_node(self, surf, g, u, view, t, show_red, show_blue, hl, hover, red_dbg):
+    def _draw_node(self, surf, g, u, view, t, show_red, show_blue, hl, hover):
         net = self.net
         p = self.pts[u]
+        x, y = p
         r = self.radius(u)
         kind = net.kind[u]
         held = show_red and u in g.red_held
         isolated = u in g.isolated
-        ring = T.NODE_RING
-        fill = T.NODE
-        if kind == "database":
-            ring = T.GOLD
-            fx.blit_glow(surf, p, 58, T.GOLD, 0.9 + 0.2 * math.sin(t * 2))
-        elif kind == "gateway":
-            ring = (210, 220, 240)
+        ink = T.INK
+        fill = T.PAPER
         if held:
-            ring = T.RED
-            fill = (58, 14, 26)
-            fx.blit_glow(surf, p, 30, T.RED, 0.7)
+            ink, fill = T.RED_DARK, T.RED
         if isolated:
-            ring = (110, 120, 140)
-            fill = (20, 22, 30)
-        pygame.draw.circle(surf, fill, p, r)
-        pygame.draw.circle(surf, ring, p, r, 2)
-        if kind == "database":
-            ang = t * 0.8
-            rect = pygame.Rect(0, 0, 2 * r + 16, 2 * r + 16)
-            rect.center = p
-            for i in range(3):
-                a0 = ang + i * 2 * math.pi / 3
-                pygame.draw.arc(surf, T.GOLD, rect, a0, a0 + 1.2, 2)
-            fx.text(surf, "DB", p, 13, T.GOLD, "black", anchor="center")
-        elif kind == "gateway":
-            fx.text(surf, "GW", p, 11, (220, 228, 245), "bold", anchor="center")
-        else:
-            inner = {"bridge": 4, "fileserver": 3, "storage": 3, "server": 3, "workstation": 2}[kind]
-            pygame.draw.circle(surf, ring, p, inner)
+            ink = T.BLUE
 
-        # Blue-only markers
-        if show_blue:
-            if u in g.patched:
-                rect = pygame.Rect(0, 0, 2 * r + 8, 2 * r + 8)
-                rect.center = p
-                pygame.draw.arc(surf, T.CYAN, rect, math.pi * 0.15, math.pi * 0.85, 2)
-            if u in g.decoys:
-                fx.diamond(surf, T.AMBER, p, r + 7, 2)
-                fx.blit_glow(surf, p, 26, T.AMBER, 0.45)
+        # decoy: dashed blue ring (Blue knows; Red does not)
+        if show_blue and u in g.decoys:
+            fx.dashed_circle(surf, T.BLUE, p, r + 9, 2, 16, rot=t * 0.4)
+
+        if kind == "database":
+            box = pygame.Rect(0, 0, 2 * r, 2 * r)
+            box.center = p
+            pygame.draw.rect(surf, T.PAPER, box.inflate(10, 10))
+            pygame.draw.rect(surf, T.OCHRE, box.inflate(10, 10), 1)
+            pygame.draw.rect(surf, T.OCHRE if not held else T.RED, box)
+            fx.text(surf, "DB", (x, y + 1), 17, T.PAPER, "bold", display=True, anchor="center")
+        elif kind == "gateway":
+            box = pygame.Rect(0, 0, 2 * r, 2 * r)
+            box.center = p
+            pygame.draw.rect(surf, T.RED if held else T.INK, box)
+            fx.text(surf, "GW", (x, y + 1), 15, T.PAPER, "bold", display=True, anchor="center")
+        elif kind == "workstation":
+            pygame.draw.circle(surf, fill, p, r)
+            pygame.draw.circle(surf, ink, p, r, 2)
+        elif kind == "bridge":
+            pygame.draw.circle(surf, fill, p, r)
+            pygame.draw.circle(surf, ink, p, r, 2)
+            pygame.draw.circle(surf, ink if not held else T.PAPER, p, 3)
+        else:  # server, fileserver, storage: squares
+            box = pygame.Rect(0, 0, 2 * r, 2 * r)
+            box.center = p
+            pygame.draw.rect(surf, fill, box)
+            pygame.draw.rect(surf, ink, box, 2)
+            mark = ink if not held else T.PAPER
+            if kind == "storage":
+                pygame.draw.line(surf, mark, (x - r + 3, y), (x + r - 3, y), 2)
+            elif kind == "fileserver":
+                pygame.draw.line(surf, mark, (x - r + 3, y - 2), (x + r - 3, y - 2), 1)
+                pygame.draw.line(surf, mark, (x - r + 3, y + 2), (x + r - 3, y + 2), 1)
+
+        # patched: a small blue bar under the node
+        if show_blue and u in g.patched:
+            pygame.draw.line(surf, T.BLUE, (x - r, y + r + 4), (x + r, y + r + 4), 3)
+
+        # isolated: blue square bracket and a strike, with rounds left
         if isolated:
-            fx.hexagon(surf, T.BLUE_SOFT if view != "red" else (150, 160, 180), p, r + 8, 2, rot=t * 0.6)
-            fx.text(surf, str(g.isolated[u]), (p[0] + r + 8, p[1] - r - 6), 11, T.BLUE_SOFT, "bold", anchor="center")
+            col = T.BLUE if view != "red" else T.INK_2
+            box = pygame.Rect(0, 0, 2 * r + 14, 2 * r + 14)
+            box.center = p
+            pygame.draw.rect(surf, col, box, 2)
+            pygame.draw.line(surf, col, box.bottomleft, box.topright, 2)
+            badge = pygame.Rect(0, 0, 15, 15)
+            badge.center = box.topright
+            pygame.draw.rect(surf, col, badge)
+            fx.text(surf, str(g.isolated[u]), badge.center, 11, T.PAPER, "semibold", mono=True, anchor="center")
 
         if hl:
-            a = 0.5 + 0.5 * math.sin(t * 6)
-            pygame.draw.circle(surf, T.mix(T.WHITE, T.RED_SOFT, a), p, r + 5, 2)
+            a = 0.5 + 0.5 * math.sin(t * 5)
+            fx.dashed_circle(surf, T.mix(T.RED, T.INK, a * 0.4), p, r + 8, 2, 14, rot=t)
         if hover:
-            pygame.draw.circle(surf, T.WHITE, p, r + 4, 1)
+            pygame.draw.circle(surf, T.INK, p, r + 11, 1)
 
         # label and (in Red's view) what Red believes the weakness is
-        lab_col = T.MUTED if not held else T.RED_SOFT
-        if kind not in ("database", "gateway"):
-            fx.text(surf, net.label[u], (p[0], p[1] + r + 3), 10, lab_col, "medium", anchor="midtop")
+        if kind not in ("database", "gateway") and getattr(self, "show_labels", True):
+            lab_col = T.RED_DARK if held else T.INK_2
+            fx.text(surf, net.label[u], (x, y + r + 6), 11, lab_col, "medium", mono=True, anchor="midtop",
+                    bg=self._zone_fill(u, view))
         if view == "red" and u in g.red_intel_weak and u not in g.red_held and kind != "database":
             w = g.red_intel_weak[u]
-            fx.text(surf, f"{int(w * 100)}%", (p[0], p[1] - r - 3), 10, T.RED_SOFT, "bold", anchor="midbottom")
+            fx.text(surf, f"{int(w * 100)}%", (x, y - r - 4), 11, T.RED, "semibold", mono=True, anchor="midbottom",
+                    bg=T.PAPER_2)
