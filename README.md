@@ -38,6 +38,7 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `python main.py --host --side red` | Host an online game as Red and wait for someone to join |
 | `python main.py --join 192.168.1.20` | Join the online game hosted on that computer |
 | `python main.py --join 192.168.1.20 --ai` | Join, but let your AI play your side |
+| `python main.py --theme dark` | Starts in the dark (original neon) theme |
 
 ### Controls (AI vs AI)
 
@@ -48,8 +49,13 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `V` or `1` `2` `3` | Switch between Red's view, the full view and Blue's view |
 | `+` / `-` | Speed (0.5x to 4x) |
 | `R` | Restart on the same map |
-| `M` / `Esc` | Back to the menu |
-| `F12` | Screenshot |
+| `Esc` | Pause menu (resume, settings, controls, restart, new map, main menu) |
+| `H` | Show all controls |
+| `T` | Switch theme (paper / dark) |
+| `M` | Back to the menu |
+| `F11` / `F12` | Fullscreen / screenshot |
+
+Point at any node to see what the current view knows about it.
 
 **Playing as Red:** click a marked neighbouring node to capture it (or unlock it across a zone border,
 advance onto your own node, or claim the database). `S` scouts.
@@ -64,6 +70,20 @@ and the full view shows the truth.
 | --- | --- |
 | ![Red's view](docs/screenshots/red-view.png) | ![Blue's view](docs/screenshots/blue-view.png) |
 
+### Themes and settings
+
+There are two themes. **Paper** (the default) draws the network like a printed operations map. **Dark** is
+the original neon look. Switch with `T`, in Settings, or with `--theme dark`.
+
+Settings (main menu or the pause menu) are saved to `~/.zero_day/settings.json`: theme, fullscreen,
+node labels, hover info, animations (full or reduced), FPS counter, default speed and view, auto next
+match (AI vs AI keeps playing new maps, handy for a demo loop), whether Blue's turn ends automatically
+when its action points run out, and sound effects with volume.
+
+| Paper (default) | Dark |
+| --- | --- |
+| ![Paper theme](docs/screenshots/full-view.png) | ![Dark theme](docs/screenshots/dark-view.png) |
+
 ### Online play
 
 Pick **PLAY ONLINE** in the menu. One player chooses **HOST A GAME**; the other sees that game under
@@ -72,7 +92,7 @@ the sides and the joiner gets the other one. Each player only ever sees their ow
 of war is real: Red never sees Blue's moves and Blue only sees alerts.
 
 **WHO PLAYS IT** decides whether you play or your AI plays for you, so the same screen covers human vs
-human, human vs AI across two laptops, and AI vs AI across two laptops. `T` opens chat. After a match the
+human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat. After a match the
 host presses `R` (same map) or `N` (new map); the joiner's `R` / `N` asks the host for a rematch.
 
 How it works: both computers build the same map from the shared seed and the engine's dice are seeded
@@ -223,4 +243,4 @@ Every knob is in `engine/config.py`.
 
 ## Credits
 
-Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (all SIL Open Font License); licences in `assets/fonts/`.
+Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (paper theme), Inter and DejaVu Sans Mono (dark theme), all under free licences; see `assets/fonts/`.
