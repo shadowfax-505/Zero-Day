@@ -1014,6 +1014,12 @@ class App:
         """The game loop. Async so the browser build (pygbag) can hand control back to the page every frame."""
         running = True
         print("Zero Day running", "(browser)" if WEB else "")
+        if WEB:
+            try:
+                import platform as _pf
+                _pf.window.console.log("Zero Day running (browser)")
+            except Exception:  # noqa: BLE001
+                pass
         while running:
             dt = self.clock.tick(60) / 1000.0
             for ev in pygame.event.get():

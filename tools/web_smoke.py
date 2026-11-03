@@ -34,6 +34,8 @@ def boot(browser, name):
     else:
         page.screenshot(path=f"{OUT}/{name}-stuck.png")
         print("\n".join(log[-60:]))
+        print("---- page text ----")
+        print(page.evaluate("document.body.innerText")[-4000:])
         raise SystemExit(f"{name}: the game never started")
     page.wait_for_timeout(3000)
     page.screenshot(path=f"{OUT}/{name}-menu.png")
@@ -47,7 +49,7 @@ def key(page, k, n=1, wait=250):
 
 
 def errors(log):
-    return [line for line in log if "Traceback" in line or "Error" in line and "PAGEERROR" in line]
+    return [line for line in log if "Traceback" in line or "crashed" in line or line.startswith("PAGEERROR")]
 
 
 def main():

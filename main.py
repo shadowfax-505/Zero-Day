@@ -24,6 +24,16 @@ import sys
 WEB = sys.platform == "emscripten"
 
 
+def web_log(text):
+    """Browser build: also write to the page's JavaScript console (print() only reaches pygbag's terminal)."""
+    if WEB:
+        try:
+            import platform as _pf
+            _pf.window.console.log(str(text))
+        except Exception:  # noqa: BLE001
+            pass
+
+
 async def main():
     ap = argparse.ArgumentParser(description="Zero Day - Red AI vs Blue AI")
     ap.add_argument("--mode", choices=["ai", "red", "blue"], help="skip the menu and start this mode")
@@ -58,5 +68,14 @@ async def main():
     await app.run_async()
 
 
+async def run():
+    try:
+        await main()
+    except Exception:
+        import traceback
+        web_log("Zero Day crashed:\n" + traceback.format_exc())
+        raise
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run())
