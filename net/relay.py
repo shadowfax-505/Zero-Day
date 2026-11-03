@@ -21,7 +21,7 @@ Two transports:
 
 import json
 import os
-import queue
+from collections import deque
 import sys
 import threading
 import time
@@ -98,7 +98,7 @@ class _ThreadSocket:
                 ws.close()
             try:
                 while True:
-                    self.inbox.put(ws.recv())
+                    self.inbox.append(ws.recv())
             except Exception:  # noqa: BLE001 - closed by either side
                 pass
         self._closed()
@@ -106,7 +106,7 @@ class _ThreadSocket:
     def _closed(self):
         if self.state != "closed":
             self.state = "closed"
-            self.inbox.put(json.dumps({"t": "_closed", "why": self.error}))
+            self.inbox.append(json.dumps({"t": "_closed", "why": self.error}))
 
     def send(self, text):
         if self.state != "open":
@@ -184,7 +184,7 @@ class _BrowserSocket:
 
     def pump(self):
         for raw in json.loads(str(self.win.eval(f"zdnet.take({self.id})"))):
-            self.inbox.put(raw)
+            self.inbox.append(raw)
 
     def close(self):
         self.win.eval(f"zdnet.close({self.id})")
@@ -196,7 +196,7 @@ class RelayPeer:
 
     def __init__(self, url):
         self.url = normalise_url(url)
-        self.inbox = queue.Queue()
+        self.inbox = deque()          # deque, not queue.Queue: the browser's Python has no working locks
         self.closed = False
         self.error = None
         self.code = None              # room code once hosting (or joined)
@@ -254,8 +254,8 @@ class RelayPeer:
         self.sock.pump()
         while True:
             try:
-                raw = self.inbox.get_nowait()
-            except queue.Empty:
+                raw = self.inbox.popleft()
+            except IndexError:
                 return
             try:
                 m = json.loads(raw)
