@@ -31,6 +31,16 @@ def blue_act_text(net, a):
     return f"{ACTION_WORD[k]} {net.label[t]}"
 
 
+def view_rects():
+    """Screen rects of the RED'S / FULL / BLUE'S VIEW pills in the top bar."""
+    out, x = {}, T.W - 24
+    for v in ("blue", "full", "red"):
+        w = T.font(11, "bold").size(VIEW_NAMES[v])[0] + 22
+        out[v] = pygame.Rect(x - w, 18, w, 28)
+        x -= w + 8
+    return out
+
+
 def draw_top(surf, match, view, speed, paused, mode_label, t):
     g, net = match.game, match.net
     pygame.draw.rect(surf, (7, 12, 28), (0, 0, T.W, T.TOP_H))
@@ -48,13 +58,11 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
     br = pygame.Rect(cx + 30, 30, 220, 6)
     fx.bar(surf, br, g.round / C.MAX_ROUNDS, T.mix(T.BLUE, T.RED, g.round / C.MAX_ROUNDS))
 
-    # view pills
-    x = T.W - 24
+    # view pills (clickable in AI vs AI, see view_rects)
+    rects = view_rects()
     for v in ("blue", "full", "red"):
         name = VIEW_NAMES[v]
-        f = T.font(11, "bold")
-        w = f.size(name)[0] + 22
-        r = pygame.Rect(x - w, 18, w, 28)
+        r = rects[v]
         active = v == view
         col = {"red": T.RED, "blue": T.BLUE, "full": T.TEXT}[v]
         if active:
@@ -63,7 +71,7 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
         else:
             pygame.draw.rect(surf, T.PANEL_EDGE, r, 1, border_radius=14)
         fx.text(surf, name, r.center, 11, col if active else T.MUTED, "bold", anchor="center")
-        x -= w + 8
+    x = rects["red"].x - 8
     state = "PAUSED" if paused else f"{speed:g}x"
     fx.text(surf, f"seed {net.seed}  ·  {state}", (x - 14, 32), 12, T.MUTED, "medium", mono=True, anchor="midright")
 
