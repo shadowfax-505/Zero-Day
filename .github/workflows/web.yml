@@ -34,8 +34,10 @@ jobs:
         run: |
           python -m playwright install --with-deps chromium
           PORT=8765 python server/relay.py &
-          python -m http.server 8000 --directory build/zero-day/build/web &
-          sleep 2
+          # pygbag's own test server: on localhost the page loads wheels such as numpy from /cdn/,
+          # which this server forwards to the pygbag CDN (on GitHub Pages they load from the CDN directly)
+          python -m pygbag --port 8000 build/zero-day > pygbag-serve.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf http://localhost:8000/ > /dev/null && break; sleep 2; done
           python tools/web_smoke.py http://localhost:8000 ws://127.0.0.1:8765 http://127.0.0.1:8765
       - uses: actions/upload-artifact@v4
         if: always()
