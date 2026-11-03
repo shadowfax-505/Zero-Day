@@ -26,7 +26,11 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also works) and `numpy`.
+Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also works) and `numpy`
+(`websockets` only for online play through the relay server).
+
+No Python? Play it in the browser, or download the app for Windows, macOS or Linux from the
+[Releases](../../releases) page. [DEPLOY.md](DEPLOY.md) explains how those are published.
 
 | Command | What it does |
 | --- | --- |
@@ -38,6 +42,7 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `python main.py --host --side red` | Host an online game as Red and wait for someone to join |
 | `python main.py --join 192.168.1.20` | Join the online game hosted on that computer |
 | `python main.py --join 192.168.1.20 --ai` | Join, but let your AI play your side |
+| `python main.py --online --relay wss://zero-day-relay.onrender.com` | Online lobby, using that relay server |
 | `python main.py --theme dark` | Starts in the dark (original neon) theme |
 
 ### Controls (AI vs AI)
@@ -101,6 +106,13 @@ from it too, so only the two moves travel over the network each round (one line 
 Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
 internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.
 If a firewall prompt appears the first time you host, allow it.
+
+**Through the server.** Set **CONNECT** to *Through the server* to play anyone on any network, with
+nothing to forward: **HOST A GAME** shows a four-letter code, and the other player types it in **JOIN
+BY CODE** (or clicks the game in the list). This goes through a small relay (`server/relay.py`) that only
+passes the two players' messages along; the match still runs on both players' computers. It is the
+only option in the browser version, and a browser player and a desktop player can play each other this
+way. [DEPLOY.md](DEPLOY.md) shows how to put the relay on a free Render or Fly.io server.
 
 ---
 
@@ -223,7 +235,9 @@ agents/blue/     particle_filter.py, fuzzy.py, stackelberg.py, agent.py
 agents/baseline/ random agents for both sides
 tuning/          ga.py, best_weights.json, fitness curve
 ui/              Pygame app: menu, online lobby, network renderer, panels, effects, human input
-net/             online play: TCP link, LAN discovery, lockstep match protocol
+net/             online play: TCP link, LAN discovery, relay (WebSocket) link, lockstep match protocol
+server/          relay server for online play through the internet and the browser (Render / Fly.io)
+tools/           browser build (pygbag), desktop build (PyInstaller), browser smoke test
 experiments/     headless batch runner, charts, results
 tests/           engine, observation and online lockstep checks (python -m pytest -q)
 ```
