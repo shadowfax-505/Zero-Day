@@ -1,0 +1,55 @@
+# Builds double-clickable Zero Day apps for Windows, macOS and Linux with PyInstaller.
+# Push a tag like v1.0 (git tag v1.0 && git push origin v1.0) to attach them to a GitHub Release,
+# or run it by hand from the Actions tab to get them as downloadable build artifacts.
+name: Desktop builds
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: ZeroDay-Windows
+          - os: macos-latest
+            name: ZeroDay-macOS
+          - os: ubuntu-latest
+            name: ZeroDay-Linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install pygame-ce numpy websockets pyinstaller
+      - name: Build
+        run: python tools/build_desktop.py
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "../${{ matrix.name }}.zip" "Zero Day"
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            ditto -c -k --keepParent "Zero Day.app" "../${{ matrix.name }}.zip"
+          else
+            tar czf "../${{ matrix.name }}.tar.gz" "Zero Day"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}.*
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.name }}.*
