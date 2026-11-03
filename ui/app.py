@@ -623,8 +623,12 @@ class App:
         if v != self.view:
             self.view = v
             self.sound.play("click")
-            if sys.platform == "emscripten":
-                print(f"view: {v}")          # tools/web_smoke.py checks for this line
+            if WEB:                          # tools/web_smoke.py checks for this line in the browser console
+                try:
+                    import platform as _pf
+                    _pf.window.console.log(f"view: {v}")
+                except Exception:  # noqa: BLE001
+                    pass
 
     def handle(self, ev):
         if ev.type == pygame.QUIT:
