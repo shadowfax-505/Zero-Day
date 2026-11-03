@@ -88,3 +88,10 @@ def fade(c, k):
 
 def scale(c, k):
     return tuple(max(0, min(255, int(v * k))) for v in c)
+
+# shared token names (both themes define these, so screens and overlays can use either)
+NAME = "paper"
+CYAN = BLUE
+PANEL = PAPER_2
+PANEL_EDGE = RULE
+STRONG = INK
