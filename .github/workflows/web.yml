@@ -1,0 +1,63 @@
+# Builds the browser version with pygbag, smoke-tests it in headless Chromium,
+# and (on main) publishes it to GitHub Pages. The itch.io upload (web.zip) is
+# attached to every run as an artifact.
+name: Web build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install pygbag==0.9.3 websockets playwright
+      - name: Build with pygbag
+        run: python tools/build_web.py
+      - name: Smoke test in Chromium
+        run: |
+          python -m playwright install --with-deps chromium
+          PORT=8765 python server/relay.py &
+          python -m http.server 8000 --directory build/zero-day/build/web &
+          sleep 2
+          python tools/web_smoke.py http://localhost:8000 ws://127.0.0.1:8765 http://127.0.0.1:8765
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-smoke-screenshots
+          path: web-smoke/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zero-day-web-itch-io
+          path: build/zero-day/build/web.zip
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: build/zero-day/build/web
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

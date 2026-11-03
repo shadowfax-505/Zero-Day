@@ -7,8 +7,10 @@ original neon look). Switching skin rebinds the module names below
 (T, fx, Board, draw_top, ...), so the rest of this file never needs to know
 which one is active."""
 
+import asyncio
 import os
 import random
+import sys
 import threading
 import time
 
@@ -27,6 +29,7 @@ from ui import skins
 from ui.settings import Settings
 from ui.sound import Sound
 
+WEB = sys.platform == "emscripten"     # running in the browser (pygbag): no threads there
 SPEEDS = [0.5, 1, 2, 4]
 TOOLS = ["monitor", "patch", "decoy", "isolate", "restore"]
 AUTO_NEXT_SECONDS = 6.0
@@ -87,7 +90,7 @@ class App:
         self.online_note = None     # e.g. "Bob left the game."
         self.chat_text = None       # chat line being typed, or None
         self._build_skin_surfaces()
-        if online:
+        if online is not None:
             self._open_lobby(online)
         elif mode:
             self.start_match(mode)
@@ -211,8 +214,16 @@ class App:
             if _is_ai(m.red):
                 self.pending_red = m.ask_red()
 
-        self.worker = threading.Thread(target=work, daemon=True)
-        self.worker.start()
+        if WEB:
+            steps = []
+            if _is_ai(m.blue):
+                steps.append(lambda: setattr(self, "pending_blue", m.ask_blue()))
+            if _is_ai(m.red):
+                steps.append(lambda: setattr(self, "pending_red", m.ask_red()))
+            self.worker = _StepWorker(steps)
+        else:
+            self.worker = threading.Thread(target=work, daemon=True)
+            self.worker.start()
         self.phase = "think"
         self.phase_t = 0.0
 
@@ -638,8 +649,9 @@ class App:
 
     # menu
     def _menu_items(self):
-        return [("AI VS AI", "ai"), ("PLAY AS RED", "red"), ("PLAY AS BLUE", "blue"), ("PLAY ONLINE", "online"),
-                ("SETTINGS", "settings"), ("QUIT", "quit")]
+        items = [("AI VS AI", "ai"), ("PLAY AS RED", "red"), ("PLAY AS BLUE", "blue"), ("PLAY ONLINE", "online"),
+                 ("SETTINGS", "settings"), ("QUIT", "quit")]
+        return items[:-1] if WEB else items          # a web page can't quit
 
     def _menu_rects(self):
         return screens.menu_rects(self)
@@ -667,7 +679,7 @@ class App:
             elif ev.key in (pygame.K_RETURN, pygame.K_SPACE):
                 return self._menu_pick(items[self.menu_sel][1])
             elif ev.key == pygame.K_ESCAPE:
-                return False
+                return WEB
         if ev.type == pygame.MOUSEMOTION:
             for i, r in enumerate(self._menu_rects()):
                 if r.collidepoint(ev.pos):
@@ -831,6 +843,8 @@ class App:
         g = self.match.game
         self.phase_t += dt * self.speed
         if self.phase == "think":
+            if isinstance(self.worker, _StepWorker) and self.phase_t > 0:
+                self.worker.step()            # browser: one agent per frame so the page stays responsive
             if (self.mode == "blue" and not self.settings["confirm_turn"] and self.pending_blue is None
                     and self.human_blue_acts and self._human_blue_ap() == 0):
                 self._human_blue_commit()
@@ -994,7 +1008,12 @@ class App:
 
     # -- loop -----------------------------------------------------------------------------------
     def run(self):
+        asyncio.run(self.run_async())
+
+    async def run_async(self):
+        """The game loop. Async so the browser build (pygbag) can hand control back to the page every frame."""
         running = True
+        print("Zero Day running", "(browser)" if WEB else "")
         while running:
             dt = self.clock.tick(60) / 1000.0
             for ev in pygame.event.get():
@@ -1007,11 +1026,27 @@ class App:
             if self.record:
                 pygame.image.save(self.screen, os.path.join(self.record, f"frame_{self.frame:06d}.png"))
                 self.frame += 1
+            await asyncio.sleep(0)
         self.settings.save()
         self._leave_online()
         if self.lobby:
             self.lobby.close()
         pygame.quit()
+
+
+class _StepWorker:
+    """Stands in for the thinking thread in the browser, where threads can't run.
+    step() runs one agent; is_alive() is True until all have run."""
+
+    def __init__(self, steps):
+        self.steps = list(steps)
+
+    def step(self):
+        if self.steps:
+            self.steps.pop(0)()
+
+    def is_alive(self):
+        return bool(self.steps)
 
 
 def _is_ai(agent):
