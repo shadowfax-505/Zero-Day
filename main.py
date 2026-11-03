@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["numpy"]
+# dependencies = ["pygame-ce", "numpy"]
 # ///
 """Zero Day: Red AI (intruder) vs Blue AI (defender) on a network under fog of war.
 
@@ -20,6 +20,10 @@ import argparse
 import asyncio
 import os
 import sys
+
+# pygbag (the browser build) installs the packages main.py itself imports before running it
+import numpy  # noqa: F401
+import pygame  # noqa: F401
 
 WEB = sys.platform == "emscripten"
 
