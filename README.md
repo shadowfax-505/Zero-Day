@@ -221,4 +221,4 @@ Every knob is in `engine/config.py`.
 
 ## Credits
 
-Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (all SIL Open Font License); licences in `assets/fonts/`.
+Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (paper theme), Inter and DejaVu Sans Mono (dark theme), all under free licences; see `assets/fonts/`.
