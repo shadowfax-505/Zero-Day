@@ -16,9 +16,11 @@ from agents.red.agent import RedAI
 from engine import config as C
 from engine.mapgen import generate
 from engine.match import Match
+from net.session import OTHER, RemotePlayer
 from ui import fx
 from ui import theme as T
 from ui.board import Board, VIEWS
+from ui.online import Lobby
 from ui.panels import draw_top, draw_red_panel, draw_blue_panel, draw_bottom, act_text, blue_act_text
 
 SPEEDS = [0.5, 1, 2, 4]
@@ -27,7 +29,7 @@ MENU_MAP = pygame.Rect(720, 128, 790, 560)
 
 
 class App:
-    def __init__(self, mode=None, seed=None, speed=1, view="full", windowed=True, record=None):
+    def __init__(self, mode=None, seed=None, speed=1, view="full", windowed=True, record=None, online=None):
         pygame.init()
         pygame.display.set_caption("Zero Day - Red AI vs Blue AI")
         flags = pygame.SCALED | (pygame.RESIZABLE if windowed else pygame.FULLSCREEN)
@@ -47,7 +49,13 @@ class App:
         self.effects = []
         self.state = "menu"
         self.match = None
-        if mode:
+        self.lobby = None
+        self.online = None          # net.session.Session while playing online
+        self.online_note = None     # e.g. "Bob left the game."
+        self.chat_text = None       # chat line being typed, or None
+        if online:
+            self._open_lobby(online)
+        elif mode:
             self.start_match(mode)
 
     # -- setup -------------------------------------------------------------------
@@ -62,13 +70,39 @@ class App:
         return bg
 
     def start_match(self, mode, same_map=False):
-        self.mode = mode
+        self._leave_online()
         net = self.match.net if (same_map and self.match) else generate(self.seed)
         red = HumanRed() if mode == "red" else RedAI()
         blue = HumanBlue() if mode == "blue" else BlueAI()
+        label = {"ai": "AI VS AI", "red": "YOU (RED) VS BLUE AI", "blue": "RED AI VS YOU (BLUE)"}[mode]
+        self._begin(mode, red, blue, net, label)
+        self.view = {"red": "red", "blue": "blue"}.get(mode, self.default_view)
+
+    def start_online_match(self):
+        """Both machines call this with the same seed; only the moves travel after that."""
+        o = self.online
+        self.seed = o.seed
+        side = o.side
+        if o.local_ai:
+            local = RedAI() if side == "red" else BlueAI()
+        else:
+            local = HumanRed() if side == "red" else HumanBlue()
+        remote = RemotePlayer(OTHER[side], o.remote_name)
+        red, blue = (local, remote) if side == "red" else (remote, local)
+        who = "YOUR AI" if o.local_ai else "YOU"
+        label = f"ONLINE  /  {who} ({side.upper()}) VS {o.remote_name.upper()}"
+        self.online_note = None
+        self.chat_text = None
+        self._asked_rematch = False
+        self._desync_logged = False
+        self._begin("netai" if o.local_ai else side, red, blue, generate(o.seed), label)
+        self.view = side            # fog of war: you only ever see your own side's view
+        self.log.append((1, T.INK_2, f"Online match on map {o.seed} against {o.remote_name}. Press T to chat."))
+
+    def _begin(self, mode, red, blue, net, label):
+        self.mode = mode
         self.match = Match(red, blue, net=net)
         self.board = Board(net)
-        self.view = {"red": "red", "blue": "blue"}.get(mode, self.default_view)
         self.state = "match"
         self.phase = "think"
         self.phase_t = 0.0
@@ -82,7 +116,7 @@ class App:
         self.human_tool = "isolate"
         self.human_blue_acts = []
         self.result_t = 0.0
-        self.mode_label = {"ai": "AI VS AI", "red": "YOU (RED) VS BLUE AI", "blue": "RED AI VS YOU (BLUE)"}[mode]
+        self.mode_label = label
         # Blue's belief needs one look at the board before the first round
         if mode == "red":
             self.match.blue_debug = {}
@@ -100,9 +134,9 @@ class App:
         self.human_blue_acts = []
 
         def work():
-            if not isinstance(m.blue, HumanBlue):
+            if _is_ai(m.blue):
                 self.pending_blue = m.ask_blue()
-            if not isinstance(m.red, HumanRed):
+            if _is_ai(m.red):
                 self.pending_red = m.ask_red()
 
         self.worker = threading.Thread(target=work, daemon=True)
@@ -204,6 +238,97 @@ class App:
                 continue
             self.log.append((rec.round, T.INK_2, "   " + ev))
 
+    def _open_lobby(self, opts=None):
+        """opts (from the command line): {'host': bool, 'join': ip, 'port', 'side', 'ai', 'name'}"""
+        self.lobby = Lobby(self.seed)
+        self.state = "lobby"
+        if not opts:
+            return
+        lb = self.lobby
+        if opts.get("port"):
+            lb.port = opts["port"]
+        if opts.get("side"):
+            lb.side = opts["side"]
+        if opts.get("name"):
+            lb.name = opts["name"][:16]
+        lb.local_ai = bool(opts.get("ai"))
+        if opts.get("join"):
+            lb.ip = opts["join"]
+            lb._join(lb.ip, lb.port)
+        elif opts.get("host"):
+            lb._host()
+
+    # -- online ---------------------------------------------------------------------------
+    def _leave_online(self):
+        if self.online:
+            self.online.close()
+        self.online = None
+        self.online_note = None
+        self.chat_text = None
+
+    def _online_restart(self, new_map):
+        """Host: start the next match (same map or a fresh one) on both machines."""
+        if new_map:
+            self.seed = random.randrange(1, 100000)
+        self.online.start(self.seed)
+        self.start_online_match()
+
+    def _online_tick(self):
+        o = self.online
+        for ev in o.poll():
+            if ev[0] == "start":
+                self.start_online_match()
+            elif ev[0] == "rematch":
+                self._online_restart(ev[1])
+            elif ev[0] == "chat":
+                self.log.append((self.match.game.round, T.INK, f"{ev[1]}: {ev[2]}"))
+            elif ev[0] in ("closed", "error"):
+                self.online_note = ev[1]
+                self.log.append((self.match.game.round, T.RED, ev[1]))
+        if self.state != "match" or self.phase != "think" or o.closed:
+            return
+        g = self.match.game
+        mine = self.pending_red if o.side == "red" else self.pending_blue
+        if mine is not None and o.sent_round != g.round and self._ready_local():
+            o.send_move(g, mine)
+        theirs = o.remote_move(g.round)
+        if theirs is not None:
+            if o.side == "red" and self.pending_blue is None:
+                self.pending_blue = theirs
+            elif o.side == "blue" and self.pending_red is None:
+                self.pending_red = theirs
+        if o.desync_round is not None and not getattr(self, "_desync_logged", False):
+            self._desync_logged = True
+            self.log.append((g.round, T.RED, "Warning: the two games went out of sync. Press M and start again."))
+
+    def _ready_local(self):
+        return self.worker is None or not self.worker.is_alive()
+
+    def _remote_waiting(self):
+        """True while we still wait for the opponent's move this round."""
+        if not self.online:
+            return False
+        return (self.pending_blue if self.online.side == "red" else self.pending_red) is None
+
+    def _local_moved(self):
+        return (self.pending_red if self.online.side == "red" else self.pending_blue) is not None
+
+    def _handle_chat(self, ev):
+        if ev.type != pygame.KEYDOWN:
+            return
+        if ev.key == pygame.K_ESCAPE:
+            self.chat_text = None
+        elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            msg = self.chat_text.strip()
+            if msg and self.online and not self.online.closed:
+                self.online.chat(msg)
+                self.log.append((self.match.game.round, T.INK, f"{self.online.name}: {msg}"))
+            self.chat_text = None
+        elif ev.key == pygame.K_BACKSPACE:
+            self.chat_text = self.chat_text[:-1]
+        elif ev.unicode and ev.unicode.isprintable() and len(self.chat_text) < 80:
+            self.chat_text += ev.unicode
+
     # -- human input -------------------------------------------------------------------
     def _human_red_targets(self):
         g = self.match.game
@@ -243,13 +368,38 @@ class App:
             return False
         if self.state == "menu":
             return self._handle_menu(ev)
+        if self.state == "lobby":
+            if self.lobby.handle(ev) == "back":
+                self.lobby.close()
+                self.lobby = None
+                self.state = "menu"
+            return True
+        if self.chat_text is not None:
+            self._handle_chat(ev)
+            return True
         if ev.type == pygame.KEYDOWN:
             k = ev.key
             if k == pygame.K_ESCAPE or k == pygame.K_m:
+                self._leave_online()
                 self.state = "menu"
                 return True
             if k == pygame.K_F12:
                 self._screenshot()
+            if self.online:
+                if k == pygame.K_t:
+                    self.chat_text = ""
+                    return True
+                if self.state == "result" and k in (pygame.K_r, pygame.K_n, pygame.K_RETURN) \
+                        and not self.online.closed:
+                    new_map = k != pygame.K_r
+                    if self.online.role == "host":
+                        self._online_restart(new_map)
+                    elif not getattr(self, "_asked_rematch", False):
+                        self._asked_rematch = True
+                        self.online.request_rematch(new_map)
+                    return True
+                if k in (pygame.K_r, pygame.K_n):
+                    return True
             if self.state == "result":
                 if k == pygame.K_r:
                     self.start_match(self.mode, same_map=True)
@@ -300,7 +450,8 @@ class App:
         return True
 
     def _menu_items(self):
-        return [("AI VS AI", "ai"), ("PLAY AS RED", "red"), ("PLAY AS BLUE", "blue"), ("QUIT", "quit")]
+        return [("AI VS AI", "ai"), ("PLAY AS RED", "red"), ("PLAY AS BLUE", "blue"), ("PLAY ONLINE", "online"),
+                ("QUIT", "quit")]
 
     def _handle_menu(self, ev):
         items = self._menu_items()
@@ -335,6 +486,9 @@ class App:
     def _menu_pick(self, what):
         if what == "quit":
             return False
+        if what == "online":
+            self._open_lobby()
+            return True
         self.start_match(what)
         return True
 
@@ -352,6 +506,18 @@ class App:
         for e in self.effects:
             e.update(dt * max(1.0, self.speed * 0.75))
         self.effects = [e for e in self.effects if not e.done]
+        if self.state == "lobby":
+            sess = self.lobby.update()
+            if sess:
+                self.lobby.close(keep_session=True)
+                self.lobby = None
+                self.online = sess
+                self._asked_rematch = False
+                self._desync_logged = False
+                self.start_online_match()
+            return
+        if self.online:
+            self._online_tick()
         if self.state != "match":
             if self.state == "result":
                 self.result_t += dt
@@ -382,10 +548,14 @@ class App:
         s.blit(self.background, (0, 0))
         if self.state == "menu":
             self._draw_menu(s)
+        elif self.state == "lobby":
+            self.lobby.draw(s, self.t)
         else:
             self._draw_match(s)
             if self.state == "result":
                 self._draw_result(s)
+            if self.online:
+                self._draw_online_overlay(s)
         pygame.display.flip()
 
     def _draw_menu(self, s):
@@ -413,7 +583,7 @@ class App:
         fx.hrule(s, x0, x0 + 520, y - 12, T.INK, 2)
         for i, ((label, _), r) in enumerate(zip(self._menu_items(), self._menu_rects())):
             sel = i == self.menu_sel
-            col = [T.INK, T.RED, T.BLUE, T.INK_2][i]
+            col = [T.INK, T.RED, T.BLUE, T.INK, T.INK_2][i]
             if sel:
                 pygame.draw.rect(s, col, r)
             fx.text(s, f"{i + 1:02d}", (r.x + 14, r.centery), 15, T.PAPER if sel else T.INK_3, "medium", mono=True,
@@ -461,14 +631,22 @@ class App:
                 if isinstance(e, fx.Flash):
                     continue
                 e.draw(s)
-        if self.phase == "think" and not self._ready() and self.worker.is_alive():
+        if self.phase == "think" and not self._ready():
             self._draw_thinking(s)
 
         draw_top(s, m, self.view, self.speed, self.paused, self.mode_label, self.t)
         left = pygame.Rect(16, T.TOP_H + 12, T.SIDE_W - 16, T.H - T.TOP_H - T.BOTTOM_H - 24)
         right = pygame.Rect(T.W - T.SIDE_W, T.TOP_H + 12, T.SIDE_W - 16, left.h)
-        draw_red_panel(s, left, m, self.view, self.mode == "red", self._red_help())
-        draw_blue_panel(s, right, m, self.view, self.mode == "blue", self._blue_help())
+        sub = {}
+        if self.online:
+            o = self.online
+            mine = "Your AI on this computer" if o.local_ai else None
+            sub[o.side] = mine
+            sub[OTHER[o.side]] = f"{o.remote_name}, playing online"
+        draw_red_panel(s, left, m, self.view, self.mode == "red", self._red_help(), subtitle=sub.get("red"),
+                       can_switch=not self.online)
+        draw_blue_panel(s, right, m, self.view, self.mode == "blue", self._blue_help(), subtitle=sub.get("blue"),
+                        can_switch=not self.online)
         draw_bottom(s, self.log, self._controls(), self.t)
         for e in self.effects:
             if isinstance(e, fx.Flash) and self.view in getattr(e, "views", VIEWS):
@@ -497,16 +675,51 @@ class App:
 
     def _draw_thinking(self, s):
         r = self.board.rect
+        dots = "." * (1 + int(self.t * 3) % 3)
+        if self.online:
+            if self.online.closed:
+                return
+            name = self.online.remote_name
+            if self._remote_waiting():
+                msg = f"Waiting for {name}{dots}" if self._local_moved() else f"{name} is still deciding{dots}"
+                col = T.INK_2
+            else:
+                msg = f"{name} has locked in a move. Your turn!"
+                col = T.RED if self.online.side == "red" else T.BLUE
+            if self.mode == "netai" and not self._local_moved():
+                msg = f"Your AI is thinking{dots}"
+            fx.text(s, msg, (r.x + 14, r.bottom - 10), 13, col, "medium", mono=True, anchor="bottomleft")
+            return
         names = []
-        if self.pending_blue is None and not isinstance(self.match.blue, HumanBlue):
+        if self.pending_blue is None and _is_ai(self.match.blue):
             names.append("Blue")
-        if self.pending_red is None and not isinstance(self.match.red, HumanRed):
+        if self.pending_red is None and _is_ai(self.match.red):
             names.append("Red")
         if not names:
             return
-        dots = "." * (1 + int(self.t * 3) % 3)
         fx.text(s, f"{' and '.join(names)} thinking{dots}", (r.x + 14, r.bottom - 10), 12, T.INK_2, "regular",
                 mono=True, anchor="bottomleft")
+
+    def _draw_online_overlay(self, s):
+        """Chat box, and a banner when the other player has gone."""
+        if self.chat_text is not None:
+            box = pygame.Rect(T.SIDE_W + 16, T.H - T.BOTTOM_H - 58, T.W - 2 * T.SIDE_W - 32, 40)
+            pygame.draw.rect(s, T.PAPER, box)
+            pygame.draw.rect(s, T.INK, box, 2)
+            caret = "_" if int(self.t * 2) % 2 == 0 else " "
+            fx.spaced(s, "SAY", (box.x + 14, box.centery + 1), 16, T.INK_2, "bold", 2, anchor="midleft")
+            fx.text(s, self.chat_text + caret, (box.x + 60, box.centery), 16, T.INK, "regular", anchor="midleft")
+            fx.text(s, "Enter send   Esc cancel", (box.right - 12, box.centery), 12, T.INK_3, "regular",
+                    mono=True, anchor="midright")
+        if self.online_note:
+            card = pygame.Rect(0, 0, 640, 120)
+            card.center = (T.W // 2, T.TOP_H + 90)
+            pygame.draw.rect(s, T.PAPER, card)
+            pygame.draw.rect(s, T.INK, card, 2)
+            pygame.draw.rect(s, T.RED, (card.x, card.y, card.w, 8))
+            fx.spaced(s, "CONNECTION LOST", (card.x + 28, card.y + 26), 22, T.RED, "bold", 2)
+            fx.text(s, self.online_note, (card.x + 28, card.y + 60), 16, T.INK, "regular")
+            fx.text(s, "M  back to the menu", (card.x + 28, card.y + 88), 13, T.INK_2, "regular", mono=True)
 
     def _red_help(self):
         if self.mode != "red":
@@ -559,6 +772,8 @@ class App:
         if self.mode == "ai":
             return [("SPACE", "play / pause"), ("N", "step one round"), ("V", "switch view"), ("+ -", "speed"),
                     ("R", "restart map"), ("M", "menu"), ("F12", "screenshot"), ("1 2 3", "red / full / blue")]
+        if self.online:
+            return [("T", "chat"), ("M", "leave game"), ("F12", "screenshot")]
         return [("R", "restart map"), ("M", "menu"), ("F12", "screenshot")]
 
     def _draw_result(self, s):
@@ -594,8 +809,21 @@ class App:
             fx.text(s, lab, (cx, y + 14), 12, T.INK_2, "regular")
             fx.text(s, val, (cx, y + 34), 28, T.INK, "medium", mono=True)
         fx.hrule(s, x, card.right - 48, y + 84)
-        fx.text(s, "R  replay this map      N  new map      M  menu", (x, card.bottom - 30), 14, T.INK_2, "regular",
-                mono=True, anchor="midleft")
+        keys = "R  replay this map      N  new map      M  menu"
+        if self.online:
+            o = self.online
+            mine = "red" if o.side == "red" else "blue"
+            fx.spaced(s, "YOU WIN" if g.winner == mine else "YOU LOSE", (card.right - 48, card.y + 44), 22,
+                      col, "bold", 2, anchor="topright")
+            if o.closed:
+                keys = "M  menu"
+            elif o.role == "client" and getattr(self, "_asked_rematch", False):
+                keys = f"Asked {o.remote_name} for a rematch...      M  menu"
+            elif o.role == "client":
+                keys = "R  ask for a rematch      N  ask for a new map      M  menu      T  chat"
+            else:
+                keys = "R  rematch on this map      N  new map      M  menu      T  chat"
+        fx.text(s, keys, (x, card.bottom - 30), 14, T.INK_2, "regular", mono=True, anchor="midleft")
 
     # -- loop -----------------------------------------------------------------------------------
     def run(self):
@@ -612,7 +840,14 @@ class App:
             if self.record:
                 pygame.image.save(self.screen, os.path.join(self.record, f"frame_{self.frame:06d}.png"))
                 self.frame += 1
+        self._leave_online()
+        if self.lobby:
+            self.lobby.close()
         pygame.quit()
+
+
+def _is_ai(agent):
+    return not isinstance(agent, (HumanRed, HumanBlue, RemotePlayer))
 
 
 class _MenuGame:
