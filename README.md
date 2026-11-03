@@ -35,6 +35,7 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `python main.py --mode red` | You play Red against the Blue AI |
 | `python main.py --mode blue` | You play Blue against the Red AI |
 | `python main.py --mode ai --seed 42 --record frames` | Saves every frame (30 fps) for the gameplay video |
+| `python main.py --theme dark` | Starts in the dark (original neon) theme |
 
 ### Controls (AI vs AI)
 
@@ -45,8 +46,13 @@ Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also work
 | `V` or `1` `2` `3` | Switch between Red's view, the full view and Blue's view |
 | `+` / `-` | Speed (0.5x to 4x) |
 | `R` | Restart on the same map |
-| `M` / `Esc` | Back to the menu |
-| `F12` | Screenshot |
+| `Esc` | Pause menu (resume, settings, controls, restart, new map, main menu) |
+| `H` | Show all controls |
+| `T` | Switch theme (paper / dark) |
+| `M` | Back to the menu |
+| `F11` / `F12` | Fullscreen / screenshot |
+
+Point at any node to see what the current view knows about it.
 
 **Playing as Red:** click a marked neighbouring node to capture it (or unlock it across a zone border,
 advance onto your own node, or claim the database). `S` scouts.
@@ -60,6 +66,20 @@ and the full view shows the truth.
 | Red's view | Blue's view |
 | --- | --- |
 | ![Red's view](docs/screenshots/red-view.png) | ![Blue's view](docs/screenshots/blue-view.png) |
+
+### Themes and settings
+
+There are two themes. **Paper** (the default) draws the network like a printed operations map. **Dark** is
+the original neon look. Switch with `T`, in Settings, or with `--theme dark`.
+
+Settings (main menu or the pause menu) are saved to `~/.zero_day/settings.json`: theme, fullscreen,
+node labels, hover info, animations (full or reduced), FPS counter, default speed and view, auto next
+match (AI vs AI keeps playing new maps, handy for a demo loop), whether Blue's turn ends automatically
+when its action points run out, and sound effects with volume.
+
+| Paper (default) | Dark |
+| --- | --- |
+| ![Paper theme](docs/screenshots/full-view.png) | ![Dark theme](docs/screenshots/dark-view.png) |
 
 ---
 

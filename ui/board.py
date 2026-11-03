@@ -286,7 +286,7 @@ class Board:
             pygame.draw.circle(surf, T.INK, p, r + 11, 1)
 
         # label and (in Red's view) what Red believes the weakness is
-        if kind not in ("database", "gateway"):
+        if kind not in ("database", "gateway") and getattr(self, "show_labels", True):
             lab_col = T.RED_DARK if held else T.INK_2
             fx.text(surf, net.label[u], (x, y + r + 6), 11, lab_col, "medium", mono=True, anchor="midtop",
                     bg=self._zone_fill(u, view))
