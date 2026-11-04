@@ -37,6 +37,11 @@ AUTO_NEXT_SECONDS = 6.0
 # rebound by _use_skin()
 T = fx = Board = VIEWS = screens = None
 draw_top = draw_red_panel = draw_blue_panel = draw_bottom = act_text = blue_act_text = view_rects = None
+control_rects = None
+
+# keycaps in the bottom bar -> the key a click on them presses
+KEYCAP_KEYS = {"SPACE": pygame.K_SPACE, "N": pygame.K_n, "V": pygame.K_v, "+ -": pygame.K_PLUS, "R": pygame.K_r,
+               "T": pygame.K_t, "H": pygame.K_h, "ESC": pygame.K_ESCAPE, "C": pygame.K_c, "M": pygame.K_m}
 
 VIEW_KEYS = {pygame.K_1: "red", pygame.K_2: "full", pygame.K_3: "blue",
              pygame.K_KP1: "red", pygame.K_KP2: "full", pygame.K_KP3: "blue"}
@@ -44,7 +49,7 @@ VIEW_KEYS = {pygame.K_1: "red", pygame.K_2: "full", pygame.K_3: "blue",
 
 def _use_skin(name):
     global T, fx, Board, VIEWS, screens, draw_top, draw_red_panel, draw_blue_panel, draw_bottom, act_text, \
-        blue_act_text, view_rects
+        blue_act_text, view_rects, control_rects
     sk = skins.load(name)
     T, fx, screens = sk.T, sk.fx, sk.screens
     Board, VIEWS = sk.board.Board, sk.board.VIEWS
@@ -52,6 +57,7 @@ def _use_skin(name):
     draw_top, draw_red_panel, draw_blue_panel, draw_bottom = p.draw_top, p.draw_red_panel, p.draw_blue_panel, \
         p.draw_bottom
     act_text, blue_act_text, view_rects = p.act_text, p.blue_act_text, p.view_rects
+    control_rects = p.control_rects
     return sk
 
 
@@ -630,6 +636,44 @@ class App:
                 except Exception:  # noqa: BLE001
                     pass
 
+    def _can_switch_view(self):
+        return self.mode == "ai" and not self.online
+
+    def _click_target(self, pos):
+        """What a left click at pos would press during a match: ("view", v), ("key", K_...) or None."""
+        if self.state not in ("match", "result") or self.match is None or self.overlay or self.chat_text is not None:
+            return None
+        if self._can_switch_view():
+            for v, r in view_rects().items():
+                if r.inflate(4, 8).collidepoint(pos):
+                    return "view", v
+            if self.state == "match":
+                left, right = self._side_rects()
+                if self.view == "blue" and left.collidepoint(pos):      # Red's panel is hidden: show Red's view
+                    return "view", "red"
+                if self.view == "red" and right.collidepoint(pos):
+                    return "view", "blue"
+        if self.state == "match":
+            for keycap, _, _, row in control_rects(self._controls()):
+                if keycap in KEYCAP_KEYS and row.collidepoint(pos):
+                    return "key", KEYCAP_KEYS[keycap]
+        return None
+
+    def _side_rects(self):
+        left = pygame.Rect(16, T.TOP_H + 12, T.SIDE_W - 16, T.H - T.TOP_H - T.BOTTOM_H - 24)
+        right = pygame.Rect(T.W - T.SIDE_W, T.TOP_H + 12, T.SIDE_W - 16, left.h)
+        return left, right
+
+    def _update_cursor(self):
+        """Hand cursor over anything clickable, so it is obvious what can be clicked."""
+        want = self.state in ("match", "result") and self._click_target(pygame.mouse.get_pos()) is not None
+        if want != getattr(self, "_hand", False):
+            self._hand = want
+            try:
+                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if want else pygame.SYSTEM_CURSOR_ARROW)
+            except Exception:  # noqa: BLE001  (no system cursors on some platforms)
+                pass
+
     def handle(self, ev):
         if ev.type == pygame.QUIT:
             return False
@@ -717,11 +761,17 @@ class App:
                     self.human_blue_acts.pop()
                 elif k in (pygame.K_RETURN, pygame.K_SPACE):
                     self._human_blue_commit()
-        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.mode == "ai" and not self.online:
-            for v, r in view_rects().items():
-                if r.collidepoint(ev.pos):
-                    self._set_view(v)
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+            hit = self._click_target(ev.pos)
+            if hit is not None:
+                kind, what = hit
+                if kind == "view":
+                    self._set_view(what)
                     return True
+                if what == pygame.K_PLUS and self.speed_i == len(SPEEDS) - 1:
+                    self.speed_i = 0                   # clicking "+ -" cycles the speed round
+                    return True
+                return self.handle(pygame.event.Event(pygame.KEYDOWN, key=what, mod=0, unicode="", scancode=0))
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == "match" and self.phase == "think":
             if self.mode == "red" and self.pending_red is None:
                 targets = self._human_red_targets()
@@ -1015,17 +1065,16 @@ class App:
             screens.draw_thinking(self, s)
 
         draw_top(s, m, self.view, self.speed, self.paused, self.mode_label, self.t)
-        left = pygame.Rect(16, T.TOP_H + 12, T.SIDE_W - 16, T.H - T.TOP_H - T.BOTTOM_H - 24)
-        right = pygame.Rect(T.W - T.SIDE_W, T.TOP_H + 12, T.SIDE_W - 16, left.h)
+        left, right = self._side_rects()
         sub = {}
         if self.online:
             o = self.online
             sub[o.side] = "Your AI on this computer" if o.local_ai else None
             sub[OTHER[o.side]] = f"{o.remote_name}, playing online"
         draw_red_panel(s, left, m, self.view, self.mode == "red", self._red_help(), subtitle=sub.get("red"),
-                       can_switch=not self.online)
+                       can_switch=self._can_switch_view())
         draw_blue_panel(s, right, m, self.view, self.mode == "blue", self._blue_help(), subtitle=sub.get("blue"),
-                        can_switch=not self.online)
+                        can_switch=self._can_switch_view())
         draw_bottom(s, self._log_lines(), self._controls(), self.t)
         for e in self.effects:
             if isinstance(e, fx.Flash) and self.view in getattr(e, "views", VIEWS):
@@ -1121,6 +1170,7 @@ class App:
                 dt = 1 / 30           # fixed step so the recording plays back at real speed
             self.update(dt)
             self.draw()
+            self._update_cursor()
             if self.record:
                 pygame.image.save(self.screen, os.path.join(self.record, f"frame_{self.frame:06d}.png"))
                 self.frame += 1

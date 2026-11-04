@@ -90,7 +90,7 @@ def _row(surf, x, y, label, value, vcol=T.TEXT, w=300):
 def _hidden(surf, rect, color, who, can_switch=True):
     fx.text(surf, f"Hidden in {who}'s view", (rect.centerx, rect.centery - 10), 15, T.scale(color, 0.8), "semibold",
             anchor="center")
-    fx.text(surf, "Press V to switch view" if can_switch else "Hidden by the fog of war",
+    fx.text(surf, "Click here or press V to switch view" if can_switch else "Hidden by the fog of war",
             (rect.centerx, rect.centery + 14), 12, T.DIM, "medium", anchor="center")
 
 
@@ -290,18 +290,27 @@ def draw_bottom(surf, log_lines, controls, t):
         fx.text(surf, f"R{rnd:02d}", (24, y), 12, T.DIM, "medium", mono=True)
         fx.text(surf, s, (68, y), 13, col, "medium")
         y += 21
-    x = T.W - 24
-    y = r.y + 16
+    mouse = pygame.mouse.get_pos()
+    for keycap, label, kr, row in control_rects(controls):
+        hot = row.collidepoint(mouse)
+        pygame.draw.rect(surf, (40, 60, 100) if hot else (20, 32, 60), kr, border_radius=5)
+        pygame.draw.rect(surf, T.CYAN if hot else T.PANEL_EDGE, kr, 1, border_radius=5)
+        fx.text(surf, keycap, kr.center, 11, T.TEXT, "bold", mono=True, anchor="center")
+        fx.text(surf, label, (row.right, kr.y + 11), 12, T.TEXT if hot else T.MUTED, "medium", anchor="midright")
+
+
+def control_rects(controls):
+    """(keycap, label, keycap rect, whole clickable row rect) for each control in the bottom bar."""
+    out = []
+    top = T.H - T.BOTTOM_H
+    x, y = T.W - 24, top + 16
     for keycap, label in controls:
-        f = T.font(11, "bold", mono=True)
-        kw = f.size(keycap)[0] + 14
+        kw = T.font(11, "bold", mono=True).size(keycap)[0] + 14
         lw = T.font(12, "medium").size(label)[0]
         kr = pygame.Rect(x - lw - kw - 8, y, kw, 22)
-        pygame.draw.rect(surf, (20, 32, 60), kr, border_radius=5)
-        pygame.draw.rect(surf, T.PANEL_EDGE, kr, 1, border_radius=5)
-        fx.text(surf, keycap, kr.center, 11, T.TEXT, "bold", mono=True, anchor="center")
-        fx.text(surf, label, (x, y + 11), 12, T.MUTED, "medium", anchor="midright")
+        out.append((keycap, label, kr, pygame.Rect(kr.x, y - 2, x - kr.x, 26)))
         y += 26
         if y > T.H - 30:
-            y = r.y + 16
+            y = top + 16
             x -= 230
+    return out
