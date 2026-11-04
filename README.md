@@ -15,6 +15,20 @@ techniques, all written from scratch.
 ![AI vs AI match, full view](docs/screenshots/full-view.png)
 
 **Team:** Muttakin Rahman Shoscho (2207061) · Yasar Wajih (2207064)
+**Course:** Artificial Intelligence Laboratory, Dept. of CSE, KUET
+
+**Play it in the browser:** <https://shadowfax-505.github.io/Zero-Day/> (works on phones too)
+
+### What's in it
+
+- **AI vs AI**, the main mode: watch the two AIs play, pause, step round by round and switch between
+  Red's view, Blue's view and the full map.
+- **Human vs AI** as either side.
+- **Online play**: two people (or one person and an AI, or two AIs) on two computers, over the LAN, by
+  IP, or through a small relay server with a four-letter game code. Chat included.
+- **Browser version** on GitHub Pages, with a proper phone layout and touch buttons.
+- **Two themes**: Paper (default) and Dark, plus a settings screen and a pause menu.
+- A batch runner and a genetic algorithm to measure and tune the AIs.
 
 ---
 
@@ -29,8 +43,9 @@ python main.py
 Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also works) and `numpy`
 (`websockets` only for online play through the relay server).
 
-No Python? Play it in the browser, or download the app for Windows, macOS or Linux from the
-[Releases](../../releases) page. [DEPLOY.md](DEPLOY.md) explains how those are published.
+No Python? Play it [in the browser](https://shadowfax-505.github.io/Zero-Day/). Desktop apps for
+Windows, macOS and Linux get attached to the [Releases](../../releases) page whenever a version tag is
+pushed. [DEPLOY.md](DEPLOY.md) explains how both are published.
 
 | Command | What it does |
 | --- | --- |
@@ -60,12 +75,18 @@ No Python? Play it in the browser, or download the app for Windows, macOS or Lin
 | `M` | Back to the menu |
 | `F11` / `F12` | Fullscreen / screenshot |
 
-Point at any node to see what the current view knows about it.
+Point at any node to see what the current view knows about it. The RED / FULL / BLUE buttons in the
+top bar can be clicked too.
 
 **Playing as Red:** click a marked neighbouring node to capture it (or unlock it across a zone border,
-advance onto your own node, or claim the database). `S` scouts.
-**Playing as Blue:** pick a tool with `Q` monitor, `W` patch, `E` decoy, `A` isolate, `D` restore, click a
-node to use it, `Backspace` to undo, `Enter` to end the turn.
+advance onto your own node, or claim the database). To scout, press `S`, click the SCOUT button at the
+top of the map, or click the node you're standing on. If Blue has isolated your only way out, the
+button turns into SCOUT AND PASS and a hint under the map tells you to wait it out.
+
+**Playing as Blue:** pick a tool with `Q` monitor, `W` patch, `E` decoy, `A` isolate, `D` restore (or
+click it in the tool bar above the map), click a node to use it, `Backspace` to undo, and `Enter` or the
+END TURN button to finish. If a move isn't allowed the game says why (for example "Isolate needs 2 AP,
+1 left"). With *Auto end-turn* on in Settings, the turn ends by itself once nothing else fits.
 
 The view toggle is the best way to explain the game in the video: Red's view shows only what the intruder
 has discovered (everything else is fog of war), Blue's view shows the belief map Blue builds from alerts,
@@ -155,7 +176,7 @@ Blue's actions resolve first, then Red's. Then the engine rolls for alerts and c
 | Monitor | Alerts in one zone are 1.6x as likely this round | 1 |
 | Patch | Halves a node's weakness (once per node) | 1 |
 | Decoy | Turns a node into a trap that looks very weak to Red. Stepping on it reveals Red's exact position | 2 |
-| Isolate | Cuts a node off for 2 rounds. If Red is on it, Red loses it and its move | 2 |
+| Isolate | Cuts a node off for 2 rounds. If Red is on it, Red loses it and its move. One at a time, 2-round recharge, and the same node can't be isolated again for 4 rounds | 2 |
 | Restore | Takes back a node Red holds but is not standing on | 2 |
 
 **Alerts.** An alert fires where Red acted with probability `noise × sensitivity × 1.6 (if monitored)`.
@@ -251,8 +272,21 @@ net/             online play: TCP link, LAN discovery, relay (WebSocket) link, l
 server/          relay server for online play through the internet and the browser (Render / Fly.io)
 tools/           browser build (pygbag), desktop build (PyInstaller), browser smoke test
 experiments/     headless batch runner, charts, results
-tests/           engine, observation and online lockstep checks (python -m pytest -q)
+tests/           engine, online lockstep, relay, phone layout and cut-off checks
+.github/         workflows: browser build + GitHub Pages, desktop builds on v* tags
 ```
+
+## Tests
+
+```bash
+pip install pytest
+python -m pytest -q
+```
+
+The tests cover the rules engine, the observations each side gets (so neither AI can peek), two copies of
+a match staying in lockstep over the network and through the relay, the phone layouts, and the Red
+"cut off" case. The browser build also gets a smoke test in GitHub Actions (`tools/web_smoke.py`): it
+loads the page in headless Chromium, starts a match, and taps through the phone layout.
 
 ## Balancing notes
 
@@ -266,6 +300,14 @@ the first version was far too strong for Blue (Red won 0% of matches), so these 
 - Scouting also maps the neighbours' links. The gateway can only be sealed after round 15 and costs 3 points.
 
 Every knob is in `engine/config.py`.
+
+## Known limitations
+
+- Red's IS-MCTS layer rarely changes A\*'s choice against the tuned Blue (see Evaluation).
+- The free Render relay sleeps after 15 minutes idle, so the first online game after a break can take
+  up to a minute to connect.
+- Settings in the browser version only last until the tab is closed.
+- The desktop apps aren't code-signed, so Windows and macOS show a warning the first time.
 
 ## Credits
 
