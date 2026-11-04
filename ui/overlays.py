@@ -136,7 +136,7 @@ def help_lines(app):
                             ("1 2 3", "Red / full / Blue view"), ("+ -", "speed 0.5x to 4x")] + common
     if app.mode == "red":
         return "You play Red", [("Click", "a marked neighbour: capture / unlock / advance / claim"),
-                                ("S", "scout nearby nodes")] + common
+                                ("S", "scout nearby nodes; also passes the round when you are cut off")] + common
     return "You play Blue", [("Q W E A D", "monitor / patch / decoy / isolate / restore"),
                              ("Click", "a node to use the tool"), ("Backspace", "undo last action"),
                              ("Enter", "end turn")] + common
