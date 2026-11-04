@@ -104,6 +104,51 @@ class Game:
         self.decoy_sprung = None
         self.first_located = None   # first round Blue's top guess was Red's true node
 
+    # -- snapshots (online resync) --------------------------------------------
+    def snapshot(self):
+        """Everything that changes during a match, as plain JSON-safe data."""
+        v, internal, gauss = self.rng.getstate()
+        return {
+            "round": self.round, "red_pos": self.red_pos, "red_held": sorted(self.red_held),
+            "weakness": list(self.weakness), "decoys": sorted(self.decoys), "patched": sorted(self.patched),
+            "isolate_ready": self.isolate_ready,
+            "isolated": sorted(self.isolated.items()), "immune": sorted(self.immune.items()),
+            "monitored": sorted(self.monitored), "open_gates": sorted(sorted(e) for e in self.open_gates),
+            "winner": self.winner, "reason": self.reason,
+            "red_known": sorted(self.red_known),
+            "red_known_edges": sorted((u, sorted(vs)) for u, vs in self.red_known_edges.items()),
+            "red_intel_weak": sorted(self.red_intel_weak.items()), "red_expanded": sorted(self.red_expanded),
+            "red_tries": sorted(self.red_tries.items()), "red_events": [list(e) for e in self.red_events],
+            "last_alerts": [list(a) for a in self.last_alerts],
+            "blue_feedback": [list(f) for f in self.blue_feedback],
+            "decoy_sprung": self.decoy_sprung, "first_located": self.first_located,
+            "rng": [v, list(internal), gauss],
+        }
+
+    def restore(self, st):
+        """Overwrite this game's state with a snapshot() taken on the same map."""
+        self.round, self.red_pos = int(st["round"]), int(st["red_pos"])
+        self.red_held = set(st["red_held"])
+        self.weakness = [float(w) for w in st["weakness"]]
+        self.decoys, self.patched = set(st["decoys"]), set(st["patched"])
+        self.isolate_ready = int(st["isolate_ready"])
+        self.isolated = {int(u): int(n) for u, n in st["isolated"]}
+        self.immune = {int(u): int(n) for u, n in st["immune"]}
+        self.monitored = set(st["monitored"])
+        self.open_gates = {frozenset(e) for e in st["open_gates"]}
+        self.winner, self.reason = st["winner"], st["reason"]
+        self.red_known = set(st["red_known"])
+        self.red_known_edges = {int(u): set(vs) for u, vs in st["red_known_edges"]}
+        self.red_intel_weak = {int(u): float(w) for u, w in st["red_intel_weak"]}
+        self.red_expanded = set(st["red_expanded"])
+        self.red_tries = {int(u): int(n) for u, n in st["red_tries"]}
+        self.red_events = [tuple(e) for e in st["red_events"]]
+        self.last_alerts = [tuple(a) for a in st["last_alerts"]]
+        self.blue_feedback = [tuple(f) for f in st["blue_feedback"]]
+        self.decoy_sprung, self.first_located = st["decoy_sprung"], st["first_located"]
+        v, internal, gauss = st["rng"]
+        self.rng.setstate((v, tuple(internal), gauss))
+
     # -- knowledge ---------------------------------------------------------
     def _reveal_node(self, u):
         self.red_known.add(u)

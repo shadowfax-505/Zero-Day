@@ -2,11 +2,13 @@
 
 from agents.baseline.random_agents import RandomRed, RandomBlue
 from agents.blue.agent import BlueAI, DEFAULT_WEIGHTS
-from agents.red.agent import RedAI
+from agents.red.agent import RedAI, DEFAULT_WEIGHTS as RED_DEFAULTS
 
 RED = {
     "ai": lambda fast=False: RedAI(time_limit=0.05 if fast else 0.2, iterations=400 if fast else 1000),
     "astar": lambda fast=False: RedAI(use_mcts=False),
+    "untuned": lambda fast=False: RedAI(time_limit=0.05 if fast else 0.2, iterations=400 if fast else 1000,
+                                        weights=RED_DEFAULTS, name="Red AI (untuned)"),
     "random": lambda fast=False: RandomRed(),
 }
 

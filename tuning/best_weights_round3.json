@@ -1,0 +1,24 @@
+{
+  "side": "blue",
+  "fitness": 0.5095,
+  "pop": 14,
+  "generations": 8,
+  "planned_generations": 8,
+  "matches_per_eval": 30,
+  "racing": true,
+  "weights": {
+    "path": 1.4667,
+    "detect": 0.7475,
+    "catch": 5.0,
+    "value": 1.6265,
+    "decoy": 0.1131,
+    "patch_pref": 1.0635,
+    "restore_pref": 0.6739,
+    "watch": 33.0944,
+    "act": 72.0459,
+    "alert_mid": 0.5851,
+    "conf_mid": 0.1602,
+    "stay": 0.3152,
+    "toward_db": 2.3965
+  }
+}

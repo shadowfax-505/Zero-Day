@@ -3,6 +3,8 @@
     client -> host   hello   {name, v}
     host -> client   start   {seed, host_side, name, match}      (also used for every rematch)
     both             move    {match, round, act, fp}             fp = state fingerprint before the move
+    host -> client   move    {..., state}                        after a desync: the host's full state,
+                                                                 which the client adopts before the round
     client -> host   rematch {new_map}                           host answers with a new start
     both             chat    {text}
     both             bye
@@ -51,6 +53,10 @@ class Session:
         self.sent_round = None
         self.my_fp = {}
         self.desync_round = None
+        self.resyncs = 0                  # how many times this match was put back in sync
+        self.resync_needed = False        # host: send the full state with the next move
+        self.resync_state = {}            # client: round -> host state to adopt before that round
+        self.state_sent_round = None
         self.closed = False
         self.greeted = False
         if role == "client":
@@ -69,8 +75,28 @@ class Session:
         fp = fingerprint(game)
         self.my_fp[game.round] = fp
         self.sent_round = game.round
-        self.peer.send({"t": "move", "match": self.match_id, "round": game.round,
-                        "act": pack(self.side, act), "fp": fp})
+        msg = {"t": "move", "match": self.match_id, "round": game.round, "act": pack(self.side, act), "fp": fp}
+        if self.role == "host" and self.resync_needed:
+            # the host's game is the reference: ship it so the client can adopt it
+            msg["state"] = game.snapshot()
+            self.state_sent_round = game.round   # the client's fp for this round is still the old one
+            self.resync_needed = False
+            self.desync_round = None
+            self.resyncs += 1
+        self.peer.send(msg)
+
+    def adopt_state(self, game):
+        """Client: if the host sent its state for this round, take it over. Returns True if it did.
+        Call before applying the round's moves; both sides then apply the same moves to the same
+        state, so the match carries on in sync."""
+        st = self.resync_state.pop(game.round, None)
+        if st is None:
+            return False
+        game.restore(st)
+        self.my_fp[game.round] = fingerprint(game)
+        self.desync_round = None
+        self.resyncs += 1
+        return True
 
     def request_rematch(self, new_map):
         self.peer.send({"t": "rematch", "new_map": bool(new_map)})
@@ -88,6 +114,8 @@ class Session:
         self.my_fp = {}
         self.sent_round = None
         self.desync_round = None
+        self.resync_needed = False
+        self.resync_state = {}
 
     def remote_move(self, rnd):
         """The opponent's move for this round, or None if it has not arrived yet."""
@@ -95,8 +123,11 @@ class Session:
         if got is None:
             return None
         act, fp = got
-        if fp and self.my_fp.get(rnd) and fp != self.my_fp[rnd] and self.desync_round is None:
+        if fp and self.my_fp.get(rnd) and fp != self.my_fp[rnd] and self.desync_round is None \
+                and rnd not in self.resync_state and rnd != self.state_sent_round:
             self.desync_round = rnd
+            if self.role == "host":
+                self.resync_needed = True
         return act
 
     def poll(self):
@@ -122,7 +153,12 @@ class Session:
                 out.append(("start", self.seed))
             elif t == "move":
                 if int(m.get("match", -1)) == self.match_id:
-                    self.moves[int(m["round"])] = (unpack(OTHER[self.side], m["act"]), m.get("fp"))
+                    rnd = int(m["round"])
+                    fp = m.get("fp")
+                    if self.role == "client" and isinstance(m.get("state"), dict):
+                        self.resync_state[rnd] = m["state"]
+                        fp = None        # compare again once the state is adopted
+                    self.moves[rnd] = (unpack(OTHER[self.side], m["act"]), fp)
             elif t == "rematch" and self.role == "host":
                 out.append(("rematch", bool(m.get("new_map"))))
             elif t == "chat":

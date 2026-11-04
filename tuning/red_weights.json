@@ -1,0 +1,17 @@
+{
+  "side": "red",
+  "fitness": 0.5167,
+  "pop": 14,
+  "generations": 8,
+  "planned_generations": 8,
+  "matches_per_eval": 30,
+  "racing": true,
+  "weights": {
+    "margin": 0.1094,
+    "z": 2.0624,
+    "lam_base": 0.4,
+    "lam_caught": 0.2952,
+    "lam_late": 0.7878,
+    "late_round": 31.1762
+  }
+}

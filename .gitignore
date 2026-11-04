@@ -8,3 +8,4 @@ tuning/ga_state.json
 build/
 dist/
 *.spec
+tuning/ga_state_red.json

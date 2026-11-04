@@ -63,6 +63,7 @@ SUITE = [
     ("astar", "ai", "Ablation: Red A* only (no MCTS)"),
     ("ai", "nofilter", "Ablation: Blue without particle filter"),
     ("ai", "untuned", "Ablation: Blue before GA tuning"),
+    ("untuned", "ai", "Ablation: Red before GA tuning"),
 ]
 
 

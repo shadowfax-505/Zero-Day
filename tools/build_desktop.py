@@ -15,7 +15,8 @@ SEP = ";" if os.name == "nt" else ":"
 
 
 def main():
-    data = [("assets", "assets"), (os.path.join("tuning", "best_weights.json"), "tuning")]
+    data = [("assets", "assets")] + [(os.path.join("tuning", f), "tuning") for f in
+                                     ("best_weights.json", "red_weights.json", "blue_policy.json", "red_value.json")]
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "Zero Day",
             "--hidden-import", "websockets.sync.client"]
     for src, dst in data:

@@ -1,10 +1,14 @@
 """Bayesian particle filter: where is Red? (outline section 06, part 1)
 
-Each particle is one guess "Red is on node v". Every round:
-  predict   - each particle moves along a link or stays (biased toward the database)
-  update    - weight each particle by P(observed alerts | Red at v)
-  resample  - systematic resampling
-The share of particles on each node is Blue's belief.
+Each particle is one full guess about Red: the node it stands on and the set
+of nodes it holds. Every round:
+  predict   - each particle moves along a link or stays (biased toward the
+              database); a node it moves onto joins its held set
+  update    - weight each particle by P(observed alerts | Red at v) and by how
+              well its held set explains Blue's isolate/restore feedback
+  resample  - systematic resampling (positions and held sets together)
+The share of particles on each node is Blue's belief about Red's position, and
+the share whose held set contains a node is P(Red holds it now).
 """
 
 import numpy as np
@@ -22,10 +26,13 @@ class ParticleFilter:
         self.toward_db = toward_db
         self.rng = np.random.default_rng(seed)
         self.particles = np.full(n, net.gateway, dtype=np.int32)
+        self.held = np.zeros((n, net.n), dtype=bool)   # held[i, v]: particle i says Red holds v
+        self.held[:, net.gateway] = True
+        self.rows = np.arange(n)
         self.hops_from_gw = net.bfs_hops(net.gateway)
         self.belief = np.zeros(net.n)
         self.belief[net.gateway] = 1.0
-        # P(Red has ever held v), used to choose Restore targets
+        # P(Red holds v right now), used to choose Restore targets
         self.held_prob = np.zeros(net.n)
         self.held_prob[net.gateway] = 1.0
         self.last_likelihood = np.ones(net.n)
@@ -56,6 +63,7 @@ class ParticleFilter:
         u = self.rng.random(self.n)
         rows = cdf[self.particles]
         self.particles = np.minimum((rows < u[:, None]).sum(axis=1), self.net.n - 1).astype(np.int32)
+        self.held[self.rows, self.particles] = True
 
     def likelihood(self, alerts, monitored, feedback, decoy_sprung, isolated, rnd):
         net = self.net
@@ -85,10 +93,10 @@ class ParticleFilter:
                     boost[x] = 6.0
                 lik *= boost
             elif found:
-                # Red held this node once; it is probably somewhere further along
+                # Red held this node; it is probably somewhere further along
                 ahead = np.array([net.hops_to_db[v] <= net.hops_to_db[t] for v in range(net.n)])
                 lik *= np.where(ahead, 2.0, 0.5)
-            else:
+            elif kind == "isolate":
                 lik[t] *= 0.05
         for t in isolated:
             lik[t] *= 0.01
@@ -102,26 +110,47 @@ class ParticleFilter:
     def update(self, alerts, monitored, feedback, decoy_sprung, isolated, rnd):
         lik = self.likelihood(alerts, monitored, feedback, decoy_sprung, isolated, rnd)
         self.last_likelihood = lik
-        w = lik[self.particles]
+        w = lik[self.particles] * self._held_weight(feedback)
         if w.sum() <= 0:
             w = np.ones(self.n)
         w = w / w.sum()
         # systematic resampling
         positions = (self.rng.random() + np.arange(self.n)) / self.n
-        idx = np.searchsorted(np.cumsum(w), positions)
-        self.particles = self.particles[np.minimum(idx, self.n - 1)]
+        idx = np.minimum(np.searchsorted(np.cumsum(w), positions), self.n - 1)
+        self.particles = self.particles[idx]
+        self.held = self.held[idx]
         # inject a few particles along plausible nodes so the filter can recover from surprises
         k = self.n // 50
         if decoy_sprung is None and k:
             cand = np.array([v for v in range(self.net.n)
                              if self.hops_from_gw[v] <= rnd and v not in isolated], dtype=np.int32)
             if len(cand):
-                self.particles[self.rng.integers(0, self.n, k)] = self.rng.choice(cand, k)
-        self.belief = np.bincount(self.particles, minlength=self.net.n) / self.n
-        self.held_prob = 1 - (1 - self.held_prob) * (1 - self.belief)
+                rows = self.rng.integers(0, self.n, k)
+                self.particles[rows] = self.rng.choice(cand, k)
+                self.held[rows, self.particles[rows]] = True
+        # whatever Blue isolated or restored is no longer Red's, in every particle
         for kind, t, found in feedback:
             if kind in ("isolate", "restore"):
-                self.held_prob[t] = 0.0
+                self.held[:, t] = False
+        self.held[self.rows, self.particles] = True
+        self.belief = np.bincount(self.particles, minlength=self.net.n) / self.n
+        self.held_prob = self.held.mean(axis=0)
+
+    def _held_weight(self, feedback):
+        """How well each particle's held set explains this round's isolate/restore results."""
+        w = np.ones(self.n)
+        for kind, t, found in feedback:
+            had = self.held[:, t]
+            on = self.particles == t
+            if kind == "restore":
+                if found:
+                    w *= np.where(had & ~on, 3.0, 0.2)
+                else:
+                    # a restore fails if Red never held the node, or if Red stands on it
+                    w *= np.where(had & ~on, 0.1, 1.0)
+            elif kind == "isolate" and not found:
+                w *= np.where(had, 0.1, 1.0)
+        return w
 
     def entropy(self):
         p = self.belief[self.belief > 0]

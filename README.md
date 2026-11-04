@@ -135,7 +135,9 @@ host presses `R` (same map) or `N` (new map); the joiner's `R` / `N` asks the ho
 
 How it works: both computers build the same map from the shared seed and the engine's dice are seeded
 from it too, so only the two moves travel over the network each round (one line of JSON over TCP, port
-5150). Every move carries a short fingerprint of the sender's game state, so a mismatch is caught at once.
+5150). Every move carries a short fingerprint of the sender's game state, so a mismatch is caught at once, and
+the host then sends its full game state with its next move so the joiner's copy is repaired and the match
+carries on.
 Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
 internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.
 If a firewall prompt appears the first time you host, allow it.
@@ -188,6 +190,14 @@ round 15 and costs the whole turn).
 
 ---
 
+## Gameplay
+
+Recordings of the three modes, captured from the game itself:
+
+- [Human vs AI](docs/gameplay/human-vs-ai.mp4): a player as Red on map 8 against the Blue AI
+- [AI vs AI](docs/gameplay/ai-vs-ai.mp4): map 42, switching between the full, Red and Blue views
+- [Online](docs/gameplay/online.mp4): two connected copies side by side, host as Red, joiner as Blue
+
 ## The AIs
 
 The engine owns the true state. Each agent only ever receives its own partial observation and returns an
@@ -199,17 +209,17 @@ agent whose action comes from the mouse.
 | Technique | File | What it does |
 | --- | --- | --- |
 | **A\* search** | `agents/red/astar.py` | Plans the cheapest route to the database over the nodes Red knows. Step cost `1 + λ·risk(v)` plus the expected number of retries, with `risk(v) = sensitivity × (1 − weakness) + P_decoy(v)`. Unknown territory is reached through optimistic "fog" links, and the straight-line heuristic never overestimates, so A\* stays optimal. |
-| **Information-Set MCTS** | `agents/red/ismcts.py` | Red cannot see decoys, patches or monitored zones. Every iteration samples a full hidden state from the opponent model (determinisation), then runs UCT selection (`c = 1.4`), expansion, an A\*-guided rollout and back-propagation. Statistics are shared across samples, with availability counts. Up to 1000 iterations or 200 ms per move. MCTS overrides A\*'s step only when it is clearly better on average. |
+| **Information-Set MCTS** | `agents/red/ismcts.py` | Red cannot see decoys, patches or monitored zones. Each sample draws a full hidden state from the opponent model (determinisation), and every candidate first move is played from that same sample with the same random numbers (paired sampling), then UCT (`c = 1.4`) with availability counts, expansion, an A\*-guided rollout and back-propagation. Inside the rollouts Blue follows a response policy learned from 160 logged matches, and a leaf is scored by a logistic-regression win probability fitted on the same matches (`tuning/learn_from_matches.py`). Up to 1000 rollouts or 200 ms per move. MCTS overrides A\*'s step only when a paired test says it is better by a margin and about two standard errors. |
 | **Opponent model** | `agents/red/opponent_model.py` | Counts where Blue's defences have shown up (zones where Red got caught, decoys found, nodes isolated just before Red stepped on them, failed captures) and turns the counts into Laplace-smoothed probabilities. They feed `P_decoy` in A\* and the sampling in MCTS. |
 
 ### Blue AI: track the unseen, defend ahead
 
 | Technique | File | What it does |
 | --- | --- | --- |
-| **Bayesian particle filter** | `agents/blue/particle_filter.py` | 2000 particles, each a guess "Red is on node v". Predict (move along a link, biased toward the database), update (weight by the likelihood of the alerts and of Blue's own isolate/restore results), systematic resampling. A sprung decoy collapses the belief onto one node. |
+| **Bayesian particle filter** | `agents/blue/particle_filter.py` | 2000 particles, each a full guess about Red: the node it stands on and the set of nodes it holds. Predict (move along a link, biased toward the database), update (weight by the likelihood of the alerts and by how well each held set explains Blue's own isolate/restore results), systematic resampling. The share of particles holding a node is P(Red holds it now), which drives restores. A sprung decoy collapses the belief onto one node. |
 | **Fuzzy logic triage** | `agents/blue/fuzzy.py` | A Mamdani system with triangular memberships turns alert strength, node value and belief confidence into a threat score from 0 to 100 (12 rules, centroid defuzzification). Below `watch` Blue ignores a node, above `act` it acts. |
 | **Minimax + alpha-beta pruning** | `agents/blue/stackelberg.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points, and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
-| **Genetic algorithm** | `tuning/ga.py` | Tunes Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) offline. Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is Blue's win rate against the Red AI plus a bonus for locating Red early. Best weights are saved to `tuning/best_weights.json` and loaded automatically. |
+| **Genetic algorithm** | `tuning/ga.py` | Tunes either side offline (`--side blue` or `--side red`): Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) and Red's 6 (A\* caution λ and how it changes, and the two MCTS override thresholds). Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is the side's win rate against the other side's current AI (Blue also gets a bonus for locating Red early), measured with racing: everyone plays the first third of the maps, the better half the second third, the best quarter all of them. Weights are saved to `tuning/best_weights.json` (Blue) and `tuning/red_weights.json` (Red) and loaded automatically. |
 
 Baseline random agents for both sides live in `agents/baseline/`.
 
@@ -218,40 +228,49 @@ Baseline random agents for both sides live in `agents/baseline/`.
 ## Evaluation
 
 ```bash
-python -m experiments.run_batch --suite --matches 200   # every pairing in the table, fixed seeds
+python -m experiments.run_batch --suite --matches 100   # every pairing in the table, fixed seeds
 python -m experiments.charts                            # win-rate chart and GA fitness curve
-python -m tuning.ga --pop 30 --gens 40 --matches 30     # the full GA (about 7 hours)
+python -m tuning.learn_from_matches --matches 160       # re-learn MCTS's Blue model and leaf value
+python -m tuning.ga --side red --pop 14 --gens 8 --matches 30     # tune Red against the current Blue
+python -m tuning.ga --side blue --seed-from tuning/best_weights.json   # tune Blue (warm start)
 python -m tuning.ga --resume                            # continue a stopped GA run
 ```
 
-100 matches per pairing on the same fixed seeds (maps 1 to 100), full search budgets, Blue using the
-GA-tuned weights:
+100 matches per pairing on the same fixed seeds (maps 1 to 100), full search budgets, both AIs using
+their GA-tuned weights:
 
 | Pairing | Red wins | Blue wins | Avg rounds (Red win) | Blue first locates Red |
 | --- | --- | --- | --- | --- |
-| **Red AI vs Blue AI** | **49%** | **51%** | 26.8 | round 2.9 |
-| Red AI vs random Blue | 100% | 0% | 12.2 | - |
+| **Red AI vs Blue AI** | **58%** | **42%** | 27.4 | round 2.9 |
+| Red AI vs random Blue | 100% | 0% | 12.1 | - |
 | Random Red vs Blue AI | 0% | 100% | - | round 3.2 |
-| Ablation: Red with A\* only (no MCTS) | 49% | 51% | 26.8 | round 2.9 |
-| Ablation: Blue without the particle filter | 82% | 18% | 23.2 | round 3.7 |
-| Ablation: Blue before GA tuning | 57% | 43% | 27.3 | round 3.0 |
+| Ablation: Red with A\* only (no MCTS) | 58% | 42% | 27.4 | round 2.9 |
+| Ablation: Blue without the particle filter | 87% | 13% | 22.6 | round 3.7 |
+| Ablation: Blue before GA tuning | 59% | 41% | 26.7 | round 3.1 |
+| Ablation: Red before GA tuning | 39% | 61% | 26.1 | round 2.9 |
 
 What this shows:
 
-- The main match is balanced (49 / 51), inside the 40 to 60% target from the outline.
+- The main match stays inside the 40 to 60% target from the outline (58 / 42), with Red slightly ahead.
 - Both AIs beat a random opponent in every match.
-- The particle filter is Blue's most important part: without it Blue wins only 18% instead of 51%.
-- GA tuning raised Blue's win rate from 43% to 51%.
-- Against the tuned Blue, Red's IS-MCTS layer never overrode A\*'s step in these 100 matches, so the
-  "A\* only" row is identical. Red uses MCTS to override A\* only when the sampled hidden states say
-  another move is clearly better (by 0.05 in average reward); against this Blue that never happened. With
-  a lower margin MCTS overrides more often but did not win more. In earlier runs against the untuned
-  Blue, MCTS gave Red a 6-point edge (73% vs 67%). Making MCTS pay off against the tuned Blue is the
-  main open improvement.
-- The GA ran for 41 generations (30 individuals, 30 matches each) in two parts, because the first run
-  was stopped by a machine restart after 13 generations. The second part was warm-started from the
-  first part's best weights, and the three finalists were re-tested on 60 more maps before picking the
-  winner. Fitness per generation is noisy because every generation plays on new maps.
+- The particle filter is still Blue's most important part: without it Blue wins only 13% instead of 42%.
+  Its new held-node sets cut Blue's error about which nodes Red holds from 5.5 to 3.2 nodes per round
+  and raised the share of restores that take a node back from 34% to 45% (60 test matches).
+- Tuning Red was worth 19 points: the untuned Red wins 39%, the tuned one 58%. The GA made Red bolder
+  (λ 1.0 → 0.4, less extra caution after being caught) and raised the bar for MCTS to overrule A\*.
+- The GA was run as co-evolution: Blue first (41 generations, 30 × 30), then Red against that Blue
+  (8 generations, 14 genomes, racing), then Blue again against the tuned Red. The third round's best
+  genome won its fast-budget re-test but lost at full budget (36% instead of 42%), so we kept the
+  first-round Blue weights; the round-3 genome is saved as `tuning/best_weights_round3.json`. Against the
+  tuned Red, Blue's tuning is worth only 1 point (41% → 42%); against the untuned Red it was 8.
+- MCTS was rebuilt to give it a fair chance: Blue's behaviour inside the rollouts is now learned from
+  160 logged matches, leaves are scored by a learned win probability, and every candidate move is
+  compared on the same sampled worlds with a paired significance test. That made its estimates precise
+  enough to trust, and the experiments then gave a clear answer: whenever MCTS overruled A\* (with
+  thresholds of 0, 0.02, 0.03 and 0.06) Red won the same or less. The GA independently set the threshold
+  to 0.11, where MCTS still runs every move, shows its numbers in the Red panel and acts as a check, but
+  overrules A\* almost never, so the "A\* only" row equals the full Red. With a good cost model, A\*'s
+  step is already close to the best single move against this Blue.
 
 ![Win rates](experiments/results/win_rates.png)
 
@@ -266,13 +285,13 @@ engine/          game state, rules, alert model, map generator, observations, ma
 agents/red/      astar.py, ismcts.py, opponent_model.py, agent.py
 agents/blue/     particle_filter.py, fuzzy.py, stackelberg.py, agent.py
 agents/baseline/ random agents for both sides
-tuning/          ga.py, best_weights.json, fitness curve
+tuning/          ga.py (both sides), learn_from_matches.py, tuned weights, learned MCTS models, fitness curves
 ui/              Pygame app: menu, online lobby, network renderer, panels, effects, human input
 net/             online play: TCP link, LAN discovery, relay (WebSocket) link, lockstep match protocol
 server/          relay server for online play through the internet and the browser (Render / Fly.io)
 tools/           browser build (pygbag), desktop build (PyInstaller), browser smoke test
 experiments/     headless batch runner, charts, results
-tests/           engine, online lockstep, relay, phone layout and cut-off checks
+tests/           engine, online lockstep and resync, relay, phone layout, cut-off and AI-part checks
 .github/         workflows: browser build + GitHub Pages, desktop builds on v* tags
 ```
 
@@ -284,8 +303,9 @@ python -m pytest -q
 ```
 
 The tests cover the rules engine, the observations each side gets (so neither AI can peek), two copies of
-a match staying in lockstep over the network and through the relay, the phone layouts, and the Red
-"cut off" case. The browser build also gets a smoke test in GitHub Actions (`tools/web_smoke.py`): it
+a match staying in lockstep over the network and through the relay (including repairing a forced desync),
+the phone layouts, the Red "cut off" case, and the AI parts (particle held sets, paired MCTS sampling,
+the learned models and the GA genes). The browser build also gets a smoke test in GitHub Actions (`tools/web_smoke.py`): it
 loads the page in headless Chromium, starts a match, and taps through the phone layout.
 
 ## Balancing notes
@@ -303,7 +323,6 @@ Every knob is in `engine/config.py`.
 
 ## Known limitations
 
-- Red's IS-MCTS layer rarely changes A\*'s choice against the tuned Blue (see Evaluation).
 - The free Render relay sleeps after 15 minutes idle, so the first online game after a break can take
   up to a minute to connect.
 - Settings in the browser version only last until the tab is closed.

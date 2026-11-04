@@ -1,0 +1,21 @@
+{
+  "features": [
+    "bias",
+    "cost_left",
+    "rounds_left",
+    "pace",
+    "held",
+    "heard"
+  ],
+  "weights": [
+    2.81163,
+    -1.27839,
+    -0.78942,
+    -1.42424,
+    -1.15059,
+    0.01975
+  ],
+  "samples": 5606,
+  "accuracy": 0.685,
+  "brier": 0.1965
+}

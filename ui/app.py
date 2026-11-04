@@ -463,13 +463,16 @@ class App:
             o.send_move(g, mine)
         theirs = o.remote_move(g.round)
         if theirs is not None:
+            if o.role == "client" and o.adopt_state(g):
+                self._desync_logged = False
+                self.log.append((g.round, "muted", "Back in sync: took over the host's copy of the game."))
             if o.side == "red" and self.pending_blue is None:
                 self.pending_blue = theirs
             elif o.side == "blue" and self.pending_red is None:
                 self.pending_red = theirs
         if o.desync_round is not None and not self._desync_logged:
             self._desync_logged = True
-            self.log.append((g.round, "red", "Warning: the two games went out of sync. Press M and start again."))
+            self.log.append((g.round, "red", "The two games went out of sync. Fixing it with the host's copy..."))
 
     def _ready_local(self):
         return self.worker is None or not self.worker.is_alive()

@@ -17,7 +17,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "build", "zero-day")          # pygbag names the app after this folder
 KEEP_DIRS = ["engine", "agents", "net", "ui", "assets"]
-KEEP_FILES = ["main.py", "tuning/best_weights.json", "tuning/__init__.py"]
+KEEP_FILES = ["main.py", "tuning/best_weights.json", "tuning/red_weights.json", "tuning/blue_policy.json",
+              "tuning/red_value.json", "tuning/__init__.py"]
 
 
 def copy():

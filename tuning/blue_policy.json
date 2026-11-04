@@ -1,0 +1,71 @@
+{
+  "matches": 160,
+  "seeds": [
+    5001,
+    5160
+  ],
+  "p": {
+    "iso_pos|hot": 0.4462,
+    "iso_pos|cold": 0.287,
+    "iso_next|route_hot": 0.3333,
+    "iso_next|route_cold": 0.1425,
+    "iso_next|off_route": 0.0755,
+    "patch_next|route": 0.3507,
+    "patch_next|off_route": 0.1138,
+    "decoy_next|route": 0.0286,
+    "decoy_next|off_route": 0.0105,
+    "restore_held": 0.1214,
+    "monitor_zone|hot": 0.7966,
+    "monitor_zone|cold": 0.7505
+  },
+  "counts": {
+    "iso_pos|hot": [
+      277,
+      621
+    ],
+    "iso_pos|cold": [
+      222,
+      775
+    ],
+    "iso_next|route_hot": [
+      188,
+      565
+    ],
+    "iso_next|route_cold": [
+      127,
+      896
+    ],
+    "iso_next|off_route": [
+      7,
+      104
+    ],
+    "patch_next|route": [
+      483,
+      1378
+    ],
+    "patch_next|off_route": [
+      27,
+      244
+    ],
+    "decoy_next|route": [
+      117,
+      4125
+    ],
+    "decoy_next|off_route": [
+      5,
+      570
+    ],
+    "restore_held": [
+      553,
+      4560
+    ],
+    "monitor_zone|hot": [
+      1499,
+      1881
+    ],
+    "monitor_zone|cold": [
+      2691,
+      3585
+    ]
+  }
+}
