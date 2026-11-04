@@ -16,10 +16,11 @@ VIEW_NAMES = {"red": "RED'S VIEW", "full": "FULL VIEW", "blue": "BLUE'S VIEW"}
 
 
 class Board:
-    def __init__(self, net, rect=T.BOARD):
+    def __init__(self, net, rect=T.BOARD, transpose=False):
         self.net = net
         self.rect = rect
-        pad_x, pad_y = 30, 46
+        self.transpose = transpose          # phones held upright: zones stack top to bottom
+        pad_x, pad_y = (22, 30) if transpose else (30, 46)
         self.inner = rect.inflate(-2 * pad_x, -2 * pad_y)
         self.inner.y += 10
         self.pts = [self.to_screen(p) for p in net.pos]
@@ -35,6 +36,8 @@ class Board:
         self._static = None
 
     def to_screen(self, p):
+        if self.transpose:
+            p = (p[1], p[0])
         return (int(self.inner.x + p[0] * self.inner.w), int(self.inner.y + p[1] * self.inner.h))
 
     def node_at(self, pos, visible=None):

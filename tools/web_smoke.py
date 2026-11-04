@@ -19,8 +19,12 @@ OUT = "web-smoke"
 os.makedirs(OUT, exist_ok=True)
 
 
-def boot(browser, name):
-    page = browser.new_page(viewport={"width": 1280, "height": 760})
+def boot(browser, name, phone=False):
+    if phone:      # a phone held upright, with a touch screen
+        page = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=3, is_mobile=True,
+                                has_touch=True)
+    else:
+        page = browser.new_page(viewport={"width": 1280, "height": 760})
     log = []
     page.on("console", lambda m: log.append(m.text))
     page.on("pageerror", lambda e: log.append(f"PAGEERROR {e}"))
@@ -29,7 +33,7 @@ def boot(browser, name):
     while time.time() < end:
         if any("Zero Day running" in line for line in log):
             break
-        page.mouse.click(640, 380)          # pygbag waits for a click before it starts (audio rules)
+        page.mouse.click(*((195, 420) if phone else (640, 380)))   # pygbag waits for a click before it starts (audio rules)
         page.wait_for_timeout(2000)
     else:
         page.screenshot(path=f"{OUT}/{name}-stuck.png")
@@ -46,6 +50,69 @@ def key(page, k, n=1, wait=250):
     for _ in range(n):
         page.keyboard.press(k)
         page.wait_for_timeout(wait)
+
+
+def canvas_box(page):
+    return page.evaluate("(() => { const r = document.querySelector('canvas').getBoundingClientRect();"
+                         " return [r.x, r.y, r.width, r.height]; })()")
+
+
+def layout(log):
+    """('portrait', 468, 1013) from the game's last 'Zero Day layout ...' console line."""
+    lines = [line for line in log if line.startswith("Zero Day layout ")]
+    if not lines:
+        return None
+    name, size = lines[-1].split()[3:5]
+    w, h = size.split("x")
+    return name, int(w), int(h)
+
+
+def tap(page, log, x, y, wait=800):
+    """Touch the screen at game pixel (x, y) of the current layout."""
+    _, w, h = layout(log)
+    b = canvas_box(page)
+    page.touchscreen.tap(b[0] + x / w * b[2], b[1] + y / h * b[3])
+    page.wait_for_timeout(wait)
+
+
+def phone_test(browser):
+    """Portrait phone: the phone layout is picked, touch starts a match and opens the pause menu
+    (no keyboard), and turning the phone switches to the landscape layout."""
+    ok = True
+    page, log = boot(browser, "phone", phone=True)
+    lay = layout(log)
+    print("phone layout:", lay, "canvas:", canvas_box(page))
+    if not lay or lay[0] != "portrait":
+        print("a portrait phone did not get the portrait layout")
+        return False
+    _, w, h = lay
+    b = canvas_box(page)
+    if b[2] < 390 * 0.9 or b[0] < -1 or b[0] + b[2] > 391:
+        ok = False
+        print("the canvas does not fill the phone's width")
+    n = 5                                                   # menu items in the browser (no QUIT)
+    tap(page, log, w // 2, h - 36 - n * 58 + 25, wait=20000)    # 01 AI VS AI (ui/mobile.py menu_geometry)
+    page.screenshot(path=f"{OUT}/phone-portrait-match.png")
+    bar_y = h - 64 + 8 + 25
+    tap(page, log, w - 6 - (w - 36) // 10, bar_y)             # MENU, the last button in the bottom bar
+    page.screenshot(path=f"{OUT}/phone-portrait-pause.png")
+    if not any("pause menu open" in line for line in log):
+        ok = False
+        print("tapping MENU did not open the pause menu")
+    page.set_viewport_size({"width": 844, "height": 390})     # turn the phone
+    page.wait_for_timeout(3000)
+    lay = layout(log)
+    print("after turning:", lay, "canvas:", canvas_box(page))
+    page.screenshot(path=f"{OUT}/phone-landscape-pause.png")
+    if not lay or lay[0] != "landscape":
+        ok = False
+        print("turning the phone did not switch to the landscape layout")
+    print("---- phone console ----")
+    print("\n".join(log[-30:]))
+    if errors(log):
+        ok = False
+        print("phone page logged errors")
+    return ok
 
 
 def errors(log):
@@ -80,6 +147,9 @@ def main():
         if errors(log):
             ok = False
             print("AI vs AI page logged errors")
+
+        if not phone_test(browser):
+            ok = False
 
         page2, log2 = boot(browser, "online")
         key(page2, "ArrowDown", 3)
