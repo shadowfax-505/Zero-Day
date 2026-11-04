@@ -109,12 +109,15 @@ def _row(surf, x, y, label, value, vcol=T.TEXT, w=300):
     fx.text(surf, value, (x + w, y), 13, vcol, "semibold", anchor="topright")
 
 
+SWITCH_HINT = "Press V to switch view"     # ui/mobile.py swaps in the touch wording
+
+
 def _hidden(surf, rect, color, who, can_switch=True):
     box = pygame.Rect(rect.x + 20, rect.y + 80, rect.w - 40, rect.h - 100)
     fx.hatch(surf, box, T.PAPER_3, 9, 1)
     pygame.draw.rect(surf, T.RULE, box, 1)
     fx.tag(surf, f"NOT VISIBLE IN {who.upper()}'S VIEW", (box.centerx, box.centery - 12), color, 15)
-    fx.text(surf, "Click here or press V to switch view" if can_switch else "Hidden by the fog of war",
+    fx.text(surf, SWITCH_HINT if can_switch else "Hidden by the fog of war",
             (box.centerx, box.centery + 16), 12, T.INK_2, "regular", anchor="center")
 
 
@@ -294,6 +297,8 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
 
 # -- bottom strip -----------------------------------------------------------------
 def draw_bottom(surf, log_lines, controls, t):
+    """Returns [(keycap, rect)] so the key chips can be clicked or tapped too."""
+    chips = []
     r = pygame.Rect(0, T.H - T.BOTTOM_H, T.W, T.BOTTOM_H)
     pygame.draw.rect(surf, T.PAPER, r)
     pygame.draw.line(surf, T.INK, r.topleft, r.topright, 2)
@@ -306,34 +311,24 @@ def draw_bottom(surf, log_lines, controls, t):
         fx.text(surf, s, (68, y), 13, col, "regular")
         y += 21
 
-    # controls: two columns of keycaps (each row is clickable, see control_rects)
+    # controls: two columns of keycaps
     pygame.draw.line(surf, T.RULE, (1010, r.y + 14), (1010, T.H - 14))
     fx.label(surf, "Controls", (1032, r.y + 12))
-    mouse = pygame.mouse.get_pos()
-    for keycap, label, kr, row in control_rects(controls):
-        hot = row.collidepoint(mouse)
-        pygame.draw.rect(surf, T.INK if hot else T.PAPER_2, kr)
-        pygame.draw.rect(surf, T.INK_2, kr, 1)
-        pygame.draw.line(surf, T.INK_2, (kr.x + 1, kr.bottom), (kr.right - 1, kr.bottom), 1)
-        fx.text(surf, keycap, kr.center, 11, T.PAPER if hot else T.INK, "medium", mono=True, anchor="center")
-        fx.text(surf, label, (kr.right + 10, kr.y + 10), 12, T.INK if hot else T.INK_2, "regular", anchor="midleft")
-
-
-def control_rects(controls):
-    """(keycap, label, keycap rect, whole clickable row rect) for each control in the bottom bar."""
-    out = []
-    top = T.H - T.BOTTOM_H
     cols = [1032, 1300]
-    x_i, y = 0, top + 38
+    x_i, y = 0, r.y + 38
     for keycap, label in controls:
         x = cols[x_i]
         f = T.font(11, "medium", mono=True)
         kw = max(22, f.size(keycap)[0] + 12)
         kr = pygame.Rect(x, y, kw, 20)
-        lw = T.font(12, "regular").size(label)[0]
-        out.append((keycap, label, kr, pygame.Rect(x, y - 2, kw + 10 + lw + 4, 24)))
+        chips.append((keycap, pygame.Rect(kr.x - 4, kr.y - 3, kw + 18 + f.size(label)[0], 26)))
+        pygame.draw.rect(surf, T.PAPER_2, kr)
+        pygame.draw.rect(surf, T.INK_2, kr, 1)
+        pygame.draw.line(surf, T.INK_2, (kr.x + 1, kr.bottom), (kr.right - 1, kr.bottom), 1)
+        fx.text(surf, keycap, kr.center, 11, T.INK, "medium", mono=True, anchor="center")
+        fx.text(surf, label, (kr.right + 10, y + 10), 12, T.INK_2, "regular", anchor="midleft")
         y += 26
         if y > T.H - 30:
-            y = top + 38
+            y = r.y + 38
             x_i = min(x_i + 1, len(cols) - 1)
-    return out
+    return chips

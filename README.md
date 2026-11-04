@@ -75,6 +75,18 @@ and the full view shows the truth.
 | --- | --- |
 | ![Red's view](docs/screenshots/red-view.png) | ![Blue's view](docs/screenshots/blue-view.png) |
 
+### On a phone or tablet
+
+The browser version lays itself out for the screen it is on. On a phone held upright the map fills the
+width (turned so the three zones stack top to bottom); on its side the map sits next to the panels. The
+Red, Blue and Log panels share one tabbed pane you can drag to scroll, and a row of buttons along the
+bottom does what the keys do: MENU (pause menu, the same as `Esc`), PLAY / PAUSE, STEP, VIEW and SPEED
+in AI vs AI, SCOUT as Red, the five tools plus UNDO and END TURN as Blue, and CHAT online. Typing a
+name or game code brings up the phone's own keyboard. Turning the phone switches layout on the spot.
+
+On a computer, every key in the CONTROLS legend under the map can also be clicked or tapped. To try the
+phone layouts on a computer: `ZERO_DAY_VIEWPORT=390x844 python main.py` (or `844x390` for landscape).
+
 ### Themes and settings
 
 There are two themes. **Paper** (the default) draws the network like a printed operations map. **Dark** is

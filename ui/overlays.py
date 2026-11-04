@@ -36,55 +36,122 @@ def settings_rows():
     return [row[0] for row in S.OPTIONS] + ["back"]
 
 
-def settings_row_rects(app):
-    r = SETTINGS_RECT.copy()
-    r.center = (app.sk.T.W // 2, app.sk.T.H // 2)
-    rects, y = {}, r.y + 92
+def _compact(app):
+    """True on a phone layout (ui/mobile.py): smaller cards, touch wording."""
+    return getattr(app, "layout", "desktop") != "desktop"
+
+
+def _size(app):
+    return getattr(app, "size", (app.sk.T.W, app.sk.T.H))
+
+
+def wrap(font, text, width):
+    """Split text into lines that fit width pixels."""
+    lines, cur = [], ""
+    for word in str(text).split():
+        trial = f"{cur} {word}".strip()
+        if cur and font.size(trial)[0] > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def settings_layout(app):
+    """card, {row key: rect}, [(section title, x, y, w)] for the current screen size."""
+    W, H = _size(app)
+    rects, sections = {}, []
+    if not _compact(app):
+        card = SETTINGS_RECT.copy()
+        card.center = (W // 2, H // 2)
+        y = card.y + 92
+        for row in S.SPEC:
+            if row[0] == "section":
+                sections.append((row[1], card.x + 40, y, card.w - 80))
+                y += 34
+                continue
+            rects[row[0]] = pygame.Rect(card.x + 40, y, card.w - 80, 30)
+            y += 32
+        rects["back"] = pygame.Rect(card.x + 40, card.bottom - 64, 160, 36)
+        return card, rects, sections
+    card = pygame.Rect(8, 8, W - 16, H - 16)
+    cols = 2 if W > H else 1
+    pad, sec_h, top = 16, 28, card.y + 58
+    colw = (card.w - pad * (cols + 1)) // cols
+    n_rows = len(S.OPTIONS)
+    avail = card.bottom - 62 - top
+    if cols == 1:
+        row_h = max(26, min(40, (avail - 3 * sec_h) // n_rows))
+    else:
+        row_h = max(26, min(40, (avail - 2 * sec_h) // 6))
+    col, x, y = 0, card.x + pad, top
     for row in S.SPEC:
         if row[0] == "section":
-            y += 34
+            if cols == 2 and row[1] == "Match":
+                col, x, y = 1, card.x + pad * 2 + colw, top
+            sections.append((row[1], x, y, colw))
+            y += sec_h
             continue
-        rects[row[0]] = pygame.Rect(r.x + 40, y, r.w - 80, 30)
-        y += 32
-    rects["back"] = pygame.Rect(r.x + 40, r.bottom - 64, 160, 36)
-    return r, rects
+        rects[row[0]] = pygame.Rect(x, y, colw, row_h - 2)
+        y += row_h
+    rects["back"] = pygame.Rect(card.x + pad, card.bottom - 54, 130, 42)
+    return card, rects, sections
+
+
+def settings_row_rects(app):
+    card, rects, _ = settings_layout(app)
+    return card, rects
 
 
 def draw_settings(app, s):
     T, fx = app.sk.T, app.sk.fx
+    compact = _compact(app)
     _veil(app, s, 225)
-    card, rects = settings_row_rects(app)
+    card, rects, sections = settings_layout(app)
     _card(app, s, card, T.STRONG)
-    fx.text(s, "SETTINGS", (card.x + 40, card.y + 30), 34, T.STRONG, "bold")
-    fx.text(s, "Up / Down choose    Left / Right change    Esc back (saved)", (card.right - 40, card.y + 44), 13,
-            T.MUTED, "medium", mono=True, anchor="topright")
+    if compact:
+        fx.text(s, "SETTINGS", (card.x + 16, card.y + 16), 26, T.STRONG, "bold")
+        fx.text(s, "tap < or > to change", (card.right - 16, card.y + 26), 12, T.MUTED, "medium", mono=True,
+                anchor="topright")
+    else:
+        fx.text(s, "SETTINGS", (card.x + 40, card.y + 30), 34, T.STRONG, "bold")
+        fx.text(s, "Up / Down choose    Left / Right change    Esc back (saved)", (card.right - 40, card.y + 44),
+                13, T.MUTED, "medium", mono=True, anchor="topright")
     sel = settings_rows()[app.settings_sel]
-    y = card.y + 92
-    for row in S.SPEC:
-        if row[0] == "section":
-            fx.text(s, row[1].upper(), (card.x + 40, y + 10), 13, T.MUTED, "bold")
-            pygame.draw.line(s, T.PANEL_EDGE, (card.x + 140, y + 19), (card.right - 40, y + 19))
-            y += 34
-            continue
+    for title, x, y, w in sections:
+        fx.text(s, title.upper(), (x, y + 10), 13, T.MUTED, "bold")
+        pygame.draw.line(s, T.PANEL_EDGE, (x + 100, y + 19), (x + w, y + 19))
+    for row in S.OPTIONS:
         key, label = row[0], row[1]
         r = rects[key]
         active = key == sel
         if active:
             pygame.draw.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
         col = (T.PANEL if T.NAME == "paper" else T.STRONG) if active else T.TEXT
-        fx.text(s, label, (r.x + 12, r.centery), 16, col, "semibold" if active else "medium", anchor="midleft")
+        fx.text(s, label, (r.x + 12, r.centery), 16 if not compact else 15, col,
+                "semibold" if active else "medium", anchor="midleft")
         val = app.settings.shown(key)
         fx.text(s, "<", (r.right - 230, r.centery), 16, col, "bold", mono=True, anchor="midleft")
         fx.text(s, val, (r.right - 128, r.centery), 16, col, "semibold", mono=True, anchor="center")
         fx.text(s, ">", (r.right - 26, r.centery), 16, col, "bold", mono=True, anchor="midleft")
-        y += 32
     b = rects["back"]
-    active = sel == "back"
+    active = sel == "back" or compact
     pygame.draw.rect(s, T.STRONG if active else T.PANEL_EDGE, b, 0 if active else 1)
     fx.text(s, "BACK", b.center, 15, (T.PANEL if T.NAME == "paper" else T.BG) if active else T.TEXT, "bold",
             anchor="center")
     note = next((r[4] for r in S.OPTIONS if r[0] == sel), "Save and go back.")
-    fx.text(s, note, (b.right + 24, b.centery), 13, T.MUTED, "regular", anchor="midleft")
+    if compact:
+        f = T.font(12, "regular")
+        lines = wrap(f, note, card.right - 16 - (b.right + 14))[:3]
+        y = b.centery - 8 * len(lines)
+        for line in lines:
+            fx.text(s, line, (b.right + 14, y), 12, T.MUTED, "regular")
+            y += 16
+    else:
+        fx.text(s, note, (b.right + 24, b.centery), 13, T.MUTED, "regular", anchor="midleft")
 
 
 def settings_hit(app, pos):
@@ -104,9 +171,9 @@ PAUSE_ITEMS = [("Resume", "resume"), ("Settings", "settings"), ("Controls", "hel
 
 
 def pause_rects(app):
-    T = app.sk.T
-    card = pygame.Rect(0, 0, 420, 110 + 50 * len(PAUSE_ITEMS))
-    card.center = (T.W // 2, T.H // 2)
+    W, H = _size(app)
+    card = pygame.Rect(0, 0, min(420, W - 24), 110 + 50 * len(PAUSE_ITEMS))
+    card.center = (W // 2, H // 2)
     return card, [pygame.Rect(card.x + 30, card.y + 84 + i * 50, card.w - 60, 42) for i in range(len(PAUSE_ITEMS))]
 
 
@@ -124,11 +191,13 @@ def draw_pause(app, s):
             pygame.draw.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
         col = (T.PANEL if T.NAME == "paper" else T.STRONG) if active else T.TEXT
         fx.text(s, label, (r.x + 14, r.centery), 18, col, "semibold", anchor="midleft")
-    fx.text(s, "Esc resume", (card.centerx, card.bottom - 14), 12, T.MUTED, "medium", mono=True, anchor="midbottom")
+    fx.text(s, "tap Resume to go back" if _compact(app) else "Esc resume", (card.centerx, card.bottom - 14), 12, T.MUTED, "medium", mono=True, anchor="midbottom")
 
 
 # -- help -------------------------------------------------------------------------------
 def help_lines(app):
+    if _compact(app):
+        return touch_help_lines(app)
     common = [("Esc", "pause menu"), ("H", "show / hide this help"), ("M", "main menu"), ("R", "restart this map"),
               ("F11", "fullscreen"), ("F12", "screenshot"), ("T", "switch theme")]
     if app.mode == "ai":
@@ -136,28 +205,51 @@ def help_lines(app):
                             ("1 2 3", "Red / full / Blue view"), ("+ -", "speed 0.5x to 4x")] + common
     if app.mode == "red":
         return "You play Red", [("Click", "a marked neighbour: capture / unlock / advance / claim"),
-                                ("S", "scout nearby nodes")] + common
+                                ("S", "scout nearby nodes; also passes the round when you are cut off")] + common
     return "You play Blue", [("Q W E A D", "monitor / patch / decoy / isolate / restore"),
                              ("Click", "a node to use the tool"), ("Backspace", "undo last action"),
                              ("Enter", "end turn")] + common
+
+
+def touch_help_lines(app):
+    common = [("MENU", "pause: settings, restart, new map, main menu"), ("Tabs", "Red / Blue / Log; drag to scroll"),
+              ("Tap a node", "see what is known about it")]
+    if getattr(app, "online", None):
+        common.insert(1, ("CHAT", "send your opponent a message"))
+    if app.mode == "ai":
+        return "AI vs AI", [("PLAY / PAUSE", "run or hold the match"), ("STEP", "play one round"),
+                            ("VIEW", "Red's, the full or Blue's view"), ("SPEED", "0.5x to 4x")] + common
+    if app.mode == "red":
+        return "You play Red", [("Tap", "a marked neighbour to move there"),
+                                ("SCOUT", "reveal the nodes around you")] + common
+    return "You play Blue", [("Tools", "monitor / patch / decoy / isolate / restore"),
+                             ("Tap a node", "use the chosen tool on it"), ("UNDO", "take back the last action"),
+                             ("END TURN", "lock in your actions")] + common[:2]
 
 
 def draw_help(app, s):
     T, fx = app.sk.T, app.sk.fx
     _veil(app, s, 190)
     title, lines = help_lines(app)
-    card = pygame.Rect(0, 0, 640, 120 + 30 * len(lines))
-    card.center = (T.W // 2, T.H // 2)
+    W, H = _size(app)
+    compact = _compact(app)
+    keyw = 120 if compact else 160
+    cw = min(640, W - 24)
+    f = T.font(14 if compact else 15, "regular")
+    rows = [(k, wrap(f, d, cw - 60 - keyw) if compact else [d]) for k, d in lines]
+    card = pygame.Rect(0, 0, cw, 120 + sum(30 + 18 * (len(ds) - 1) for _, ds in rows))
+    card.center = (W // 2, H // 2)
     _card(app, s, card, T.STRONG)
     fx.text(s, "CONTROLS", (card.x + 30, card.y + 26), 30, T.STRONG, "bold")
     fx.text(s, title, (card.right - 30, card.y + 38), 14, T.MUTED, "medium", anchor="topright")
     y = card.y + 84
-    for k, d in lines:
-        fx.text(s, k, (card.x + 30, y), 14, T.STRONG, "semibold", mono=True)
-        fx.text(s, d, (card.x + 190, y), 15, T.TEXT, "regular")
-        y += 30
-    fx.text(s, "any key to close", (card.centerx, card.bottom - 14), 12, T.MUTED, "medium", mono=True,
-            anchor="midbottom")
+    for k, ds in rows:
+        fx.text(s, k, (card.x + 30, y), 13 if compact else 14, T.STRONG, "semibold", mono=True)
+        for i, d in enumerate(ds):
+            fx.text(s, d, (card.x + 30 + keyw, y + 18 * i), 14 if compact else 15, T.TEXT, "regular")
+        y += 30 + 18 * (len(ds) - 1)
+    fx.text(s, "tap anywhere to close" if compact else "any key to close", (card.centerx, card.bottom - 14), 12,
+            T.MUTED, "medium", mono=True, anchor="midbottom")
 
 
 # -- tooltip ------------------------------------------------------------------------------
@@ -196,10 +288,12 @@ def draw_tooltip(app, s, u, pos):
     w = max(f.size(t)[0] for t, _ in lines) + 24
     h = 14 + 20 * len(lines)
     r = pygame.Rect(pos[0] + 18, pos[1] + 18, w, h)
-    if r.right > T.W - 8:
+    W, H = s.get_size()
+    if r.right > W - 8:
         r.right = pos[0] - 12
-    if r.bottom > T.H - 8:
+    if r.bottom > H - 8:
         r.bottom = pos[1] - 12
+    r.clamp_ip(s.get_rect())
     _card(app, s, r)
     y = r.y + 8
     for t, kind in lines:
@@ -209,5 +303,5 @@ def draw_tooltip(app, s, u, pos):
 
 def draw_fps(app, s):
     T, fx = app.sk.T, app.sk.fx
-    fx.text(s, f"{app.clock.get_fps():.0f} fps", (T.W - 10, T.H - 6), 12, T.MUTED, "medium", mono=True,
+    fx.text(s, f"{app.clock.get_fps():.0f} fps", (s.get_width() - 10, s.get_height() - 6), 12, T.MUTED, "medium", mono=True,
             anchor="bottomright")
