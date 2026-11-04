@@ -511,14 +511,44 @@ class App:
 
     # -- human input -------------------------------------------------------------------
     def _human_red_targets(self):
+        """Clickable nodes for a human Red. Red's own node is always one of them: clicking it scouts,
+        so there is always something to click even when every link out is cut."""
         g = self.match.game
-        out = {}
+        out = {g.red_pos: ("scout",)}
         for a in g.red_legal():
             if a[0] == "claim":
                 out[self.match.net.database] = a
             elif len(a) > 1:
                 out[a[1]] = a
         return out
+
+    def _red_cut_off(self):
+        """True when Scout is Red's only legal move (e.g. a dead-end node whose one link is isolated)."""
+        return all(a[0] == "scout" for a in self.match.game.red_legal())
+
+    def _human_red_scout(self):
+        self.pending_red = ("scout",)
+        self.sound.play("click")
+
+    def _red_bar_rect(self):
+        r = self.board.rect
+        return pygame.Rect(r.centerx - 110, r.y + 8, 220, 34)
+
+    def _draw_red_bar(self, s):
+        r = self._red_bar_rect()
+        cut = self._red_cut_off()
+        hot = cut or r.collidepoint(pygame.mouse.get_pos())
+        pygame.draw.rect(s, T.RED if hot else T.PAPER, r)
+        pygame.draw.rect(s, T.RED, r, 2)
+        col = T.PAPER if hot else T.RED
+        label = "SCOUT AND PASS" if cut else "SCOUT"
+        fx.text(s, label, (r.centerx, r.centery - 6), 13, col, "bold", anchor="center")
+        fx.text(s, "S  or click your node", (r.centerx, r.centery + 9), 10, col, "medium", mono=True,
+                anchor="center")
+        if cut:
+            fx.text(s, "Cut off: your only link out is isolated. Scout to pass the round; "
+                    "the isolation wears off.", (self.board.rect.centerx, self.board.rect.bottom - 34),
+                    13, T.RED, "semibold", anchor="center")
 
     def _human_blue_ap(self):
         net = self.match.net
@@ -705,8 +735,7 @@ class App:
             elif k == pygame.K_SPACE and self.mode == "ai":
                 self.paused = not self.paused
             elif self.mode == "red" and k == pygame.K_s and self.phase == "think" and self.pending_red is None:
-                self.pending_red = ("scout",)
-                self.sound.play("click")
+                self._human_red_scout()
             elif self.mode == "blue" and self.phase == "think" and self.pending_blue is None:
                 if pygame.K_F1 <= k <= pygame.K_F5:
                     self.human_tool = TOOLS[k - pygame.K_F1]
@@ -724,6 +753,9 @@ class App:
                     return True
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.state == "match" and self.phase == "think":
             if self.mode == "red" and self.pending_red is None:
+                if self._red_bar_rect().collidepoint(ev.pos):
+                    self._human_red_scout()
+                    return True
                 targets = self._human_red_targets()
                 u = self.board.node_at(ev.pos, set(targets))
                 if u is not None:
@@ -1002,6 +1034,8 @@ class App:
         red_dbg = m.red_debug if self.mode != "red" else {}
         self.board.draw(s, g, self.view, self.t, red_dbg, m.blue_debug, hl, hover, monitored)
         screens.draw_pending(self, s)
+        if self.mode == "red" and self.phase == "think" and self.pending_red is None and self.state == "match":
+            self._draw_red_bar(s)
         if self.mode == "blue" and self.phase == "think" and self.pending_blue is None and self.state == "match":
             self._draw_blue_bar(s)
         for e in self.effects:
@@ -1044,12 +1078,14 @@ class App:
             return None
         if self.pending_red is not None:
             return ["Move locked in. Waiting for Blue..."]
-        return ["Click a marked neighbour to move:",
+        cut = ["CUT OFF: no link out is open.",
+               "Press S or SCOUT to pass the round.", ""] if self._red_cut_off() else []
+        return cut + ["Click a marked neighbour to move:",
                 "  free node: Capture (chance = weakness)",
                 "  across a zone gate: Unlock (loud)",
                 "  your own node: Advance (quiet)",
                 "  the database: Claim (wins)",
-                "S: Scout (reveals nearby nodes)",
+                "S, SCOUT or your own node: Scout",
                 "",
                 "Blue sees alerts, not you. Loud moves",
                 "and decoys give you away.",
