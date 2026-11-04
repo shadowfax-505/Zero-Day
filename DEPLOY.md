@@ -1,5 +1,13 @@
 # Putting Zero Day online
 
+**Where it lives now**
+
+- Browser game: <https://shadowfax-505.github.io/Zero-Day/> (GitHub Pages, rebuilt on every push to `main`)
+- Relay server: <https://zero-day-relay.onrender.com> (Render free plan, deploys from `main`)
+- Desktop apps: built when a `v*` tag is pushed (see section 3). No release has been tagged yet.
+
+The rest of this file is how we set those up, in case you want to run your own copy.
+
 There are three pieces, and each one is free:
 
 | Piece | What it is | Where it runs |
