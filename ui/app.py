@@ -23,6 +23,7 @@ from engine import config as C
 from engine.mapgen import generate
 from engine.match import Match
 from net.session import OTHER, RemotePlayer
+from ui import device, mobile
 from ui import overlays as O
 from ui.online import Lobby
 from ui import skins
@@ -65,8 +66,11 @@ class App:
         pygame.init()
         pygame.display.set_caption("Zero Day - Red AI vs Blue AI")
         self.fullscreen = (not windowed) if windowed is not None else self.settings["fullscreen"]
-        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE)
-        self.screen = pygame.display.set_mode((T.W, T.H), flags)
+        self.layout, self.size = None, (T.W, T.H)
+        self._viewport_t = 0.0
+        self.pane_tab, self.pane_scroll, self.pane_max = "red", 0, 0
+        self._bar, self._chips, self._drag = [], [], None
+        self._set_layout(device.pick(*(device.viewport() or (0, 0))), build=False)
         self.clock = pygame.time.Clock()
         self.sound = Sound()
         self._apply_sound()
@@ -103,16 +107,57 @@ class App:
     def default_view(self):
         return self.cli_view or self.settings["view"]
 
+    @property
+    def phone(self):
+        return self.layout != "desktop"
+
+    def _set_layout(self, lay, build=True):
+        """Pick the logical screen size: 1600 x 900 on a computer, a phone-shaped one on a phone (ui/device.py)."""
+        if (lay.name, (lay.w, lay.h)) == (self.layout, self.size):
+            return
+        if pygame.display.get_surface() is not None and pygame.display.get_driver() in ("dummy", "offscreen"):
+            pygame.display.quit()        # SDL's software-only drivers crash if a SCALED window changes size
+            pygame.display.init()
+        self.layout, self.size = lay.name, (lay.w, lay.h)
+        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode(self.size, flags)
+        device.refit_canvas()
+        device.log(f"Zero Day layout {lay.name} {lay.w}x{lay.h}")
+        self.pane_scroll = 0
+        if build:
+            self.effects = []
+            self._build_skin_surfaces()
+
+    def _check_viewport(self, dt):
+        """Browser: follow the page when the phone is turned or the window is resized."""
+        self._viewport_t += dt
+        if self._viewport_t < 0.5:
+            return
+        self._viewport_t = 0.0
+        vp = device.viewport()
+        if vp:
+            self._set_layout(device.pick(*vp))
+
     def _build_skin_surfaces(self):
         self.background = screens.make_background(self)
+        if self.phone:
+            self.design = pygame.Surface((T.W, T.H))        # the online lobby is drawn here, then fitted
+            self.design_bg = self.background
+            self.background = mobile.make_background(self)
         self._new_menu_board()
         if self.match:
-            self.board = Board(self.match.net)
+            self.board = self._make_board(self.match.net)
         self._apply_labels()
+
+    def _make_board(self, net):
+        return mobile.make_board(self, net, self.mode) if self.phone else Board(net)
 
     def _new_menu_board(self):
         net = generate(self.seed)
-        self.menu_board = Board(net, screens.MENU_MAP) if screens.MENU_MAP else Board(net)
+        if self.phone:
+            self.menu_board = mobile.make_menu_board(self, net)
+        else:
+            self.menu_board = Board(net, screens.MENU_MAP) if screens.MENU_MAP else Board(net)
         self._apply_labels()
 
     def _apply_labels(self):
@@ -174,7 +219,8 @@ class App:
     def _begin(self, mode, red, blue, net, label):
         self.mode = mode
         self.match = Match(red, blue, net=net)
-        self.board = Board(net)
+        self.board = self._make_board(net)
+        self.pane_tab, self.pane_scroll = mobile.default_tab(self), 0
         self._apply_labels()
         self.state = "match"
         self.overlay = None
@@ -441,15 +487,18 @@ class App:
         if ev.key == pygame.K_ESCAPE:
             self.chat_text = None
         elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            msg = self.chat_text.strip()
-            if msg and self.online and not self.online.closed:
-                self.online.chat(msg)
-                self.log.append((self.match.game.round, "text", f"{self.online.name}: {msg}"))
+            self._send_chat(self.chat_text)
             self.chat_text = None
         elif ev.key == pygame.K_BACKSPACE:
             self.chat_text = self.chat_text[:-1]
         elif ev.unicode and ev.unicode.isprintable() and len(self.chat_text) < 80:
             self.chat_text += ev.unicode
+
+    def _send_chat(self, msg):
+        msg = (msg or "").strip()[:80]
+        if msg and self.online and not self.online.closed:
+            self.online.chat(msg)
+            self.log.append((self.match.game.round, "text", f"{self.online.name}: {msg}"))
 
     def _draw_online_thinking(self, s):
         o = self.online
@@ -471,7 +520,8 @@ class App:
     def _draw_online_overlay(self, s):
         """Result line, chat box, and a banner when the other player has gone."""
         o = self.online
-        if self.state == "result" and self.overlay is None:
+        W, H = self.size
+        if self.state == "result" and self.overlay is None and not self.phone:   # phones: on the result card
             mine = o.side
             g = self.match.game
             won = g.winner == mine
@@ -484,30 +534,34 @@ class App:
             else:
                 keys = "R  rematch on this map   N  new map   C  chat   M  menu"
             box = pygame.Rect(0, 0, 760, 48)
-            box.center = (T.W // 2, T.H - 70)
+            box.center = (W // 2, H - 70)
             pygame.draw.rect(s, T.PAPER, box)
             pygame.draw.rect(s, T.RED if g.winner == "red" else T.BLUE, box, 2)
             fx.spaced(s, "YOU WIN" if won else "YOU LOSE", (box.x + 20, box.centery), 20,
                       T.RED if g.winner == "red" else T.BLUE, "bold", 2, anchor="midleft")
             fx.text(s, keys, (box.right - 16, box.centery), 13, T.INK_2, "medium", mono=True, anchor="midright")
         if self.chat_text is not None:
-            box = pygame.Rect(T.SIDE_W + 16, T.H - T.BOTTOM_H - 58, T.W - 2 * T.SIDE_W - 32, 40)
+            if self.phone:
+                br = self.board.rect
+                box = pygame.Rect(br.x + 4, br.bottom - 48, br.w - 8, 40)
+            else:
+                box = pygame.Rect(T.SIDE_W + 16, T.H - T.BOTTOM_H - 58, T.W - 2 * T.SIDE_W - 32, 40)
             pygame.draw.rect(s, T.PAPER, box)
             pygame.draw.rect(s, T.INK, box, 2)
             caret = "_" if int(self.t * 2) % 2 == 0 else " "
             fx.spaced(s, "SAY", (box.x + 14, box.centery + 1), 16, T.INK_2, "bold", 2, anchor="midleft")
             fx.text(s, self.chat_text + caret, (box.x + 60, box.centery), 16, T.INK, "regular", anchor="midleft")
-            fx.text(s, "Enter send   Esc cancel", (box.right - 12, box.centery), 12, T.INK_3, "regular",
+            fx.text(s, "Enter send   Esc cancel" if not self.phone else "Esc cancel", (box.right - 12, box.centery), 12, T.INK_3, "regular",
                     mono=True, anchor="midright")
         if self.online_note:
-            card = pygame.Rect(0, 0, 640, 120)
-            card.center = (T.W // 2, T.TOP_H + 90)
+            card = pygame.Rect(0, 0, min(640, W - 24), 120)
+            card.center = (W // 2, (self.board.rect.y if self.phone else T.TOP_H) + 90)
             pygame.draw.rect(s, T.PAPER, card)
             pygame.draw.rect(s, T.INK, card, 2)
             pygame.draw.rect(s, T.RED, (card.x, card.y, card.w, 8))
             fx.spaced(s, "CONNECTION LOST", (card.x + 28, card.y + 26), 22, T.RED, "bold", 2)
             fx.text(s, self.online_note, (card.x + 28, card.y + 60), 16, T.INK, "regular")
-            fx.text(s, "M  back to the menu", (card.x + 28, card.y + 88), 13, T.INK_2, "regular", mono=True)
+            fx.text(s, "MENU, then Main menu" if self.phone else "M  back to the menu", (card.x + 28, card.y + 88), 13, T.INK_2, "regular", mono=True)
 
     # -- human input -------------------------------------------------------------------
     def _human_red_targets(self):
@@ -531,6 +585,8 @@ class App:
         self.sound.play("click")
 
     def _red_bar_rect(self):
+        if self.phone:
+            return pygame.Rect(0, 0, 0, 0)  # phones have SCOUT in the bottom button bar (ui/mobile.py)
         r = self.board.rect
         return pygame.Rect(r.centerx - 110, r.y + 8, 220, 34)
 
@@ -599,6 +655,8 @@ class App:
 
     # Blue's clickable tool bar along the top of the board (works without the keyboard, e.g. in a browser)
     def _blue_bar_rects(self):
+        if self.phone:
+            return []                    # phones have these in the bottom button bar (ui/mobile.py)
         r = self.board.rect
         names = TOOLS + ["end"]
         w, h, gap = 118, 34, 6
@@ -671,9 +729,15 @@ class App:
             if ev.key == pygame.K_F12:
                 self._screenshot()
                 return True
+        if self.phone and mobile.handle(self, ev):
+            return True
         if self.state == "menu":
             return self._handle_menu(ev)
         if self.state == "lobby":
+            if self.phone:
+                ev = mobile.lobby_event(self, ev)
+                if ev is None:
+                    return True
             if self.lobby.handle(ev) == "back":
                 self.lobby.close()
                 self.lobby = None
@@ -690,6 +754,11 @@ class App:
             return True
         if self.overlay == "pause":
             return self._handle_pause(ev)
+        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and not self.phone:
+            for keycap, r in self._chips:                  # the key legend under the map can be clicked / tapped
+                if r.collidepoint(ev.pos):
+                    self._press_chip(keycap)
+                    return True
         if ev.type == pygame.KEYDOWN:
             k = ev.key
             if k == pygame.K_ESCAPE:
@@ -769,6 +838,20 @@ class App:
                     self._human_blue_add(u)
         return True
 
+    CHIP_KEYS = {"SPACE": pygame.K_SPACE, "N": pygame.K_n, "V": pygame.K_v, "R": pygame.K_r, "T": pygame.K_t,
+                 "H": pygame.K_h, "ESC": pygame.K_ESCAPE, "C": pygame.K_c, "M": pygame.K_m, "S": pygame.K_s,
+                 "BKSP": pygame.K_BACKSPACE, "ENTER": pygame.K_RETURN}
+
+    def _press_chip(self, keycap):
+        self.sound.play("click")
+        if keycap == "+ -":
+            self.speed_i = (self.speed_i + 1) % len(SPEEDS)
+        elif keycap == "C" and self.online:
+            mobile.open_chat(self)
+        elif keycap in self.CHIP_KEYS:
+            self.handle(pygame.event.Event(pygame.KEYDOWN, key=self.CHIP_KEYS[keycap], mod=0, unicode="",
+                                           scancode=0))
+
     # menu
     def _menu_items(self):
         items = [("AI VS AI", "ai"), ("PLAY AS RED", "red"), ("PLAY AS BLUE", "blue"), ("PLAY ONLINE", "online"),
@@ -776,7 +859,7 @@ class App:
         return items[:-1] if WEB else items          # a web page can't quit
 
     def _menu_rects(self):
-        return screens.menu_rects(self)
+        return mobile.menu_geometry(self)["items"] if self.phone else screens.menu_rects(self)
 
     def _handle_menu(self, ev):
         items = self._menu_items()
@@ -887,6 +970,8 @@ class App:
     # pause
     def _open_pause(self):
         self.overlay = "pause"
+        if WEB:
+            device.log("pause menu open")           # tools/web_smoke.py checks for this line
         self.pause_sel = 0
 
     def _pause_pick(self, what):
@@ -940,6 +1025,7 @@ class App:
     # -- update -----------------------------------------------------------------------------
     def update(self, dt):
         self.t += dt
+        self._check_viewport(dt)
         if self.state == "lobby":
             sess = self.lobby.update()
             if sess:
@@ -991,7 +1077,9 @@ class App:
     def draw(self):
         s = self.screen
         s.blit(self.background, (0, 0))
-        if self.state == "lobby":
+        if self.phone:
+            self._draw_phone(s)
+        elif self.state == "lobby":
             self.lobby.draw(s, self.t, self.sk)
         elif self.state == "menu" or (self.state == "settings" and self.settings_from == "menu"):
             screens.draw_menu(self, s)
@@ -1017,7 +1105,38 @@ class App:
             O.draw_fps(self, s)
         pygame.display.flip()
 
+    def _draw_phone(self, s):
+        """The same screens, laid out for a phone (ui/mobile.py)."""
+        if self.state == "lobby":
+            mobile.draw_lobby(self, s)
+            return
+        if self.state == "menu" or (self.state == "settings" and self.settings_from == "menu"):
+            mobile.draw_menu(self, s)
+            if self.state == "settings":
+                O.draw_settings(self, s)
+            return
+        mobile.draw_match(self, s)
+        if self.state == "result":
+            mobile.draw_result(self, s)
+        if self.online:
+            self._draw_online_overlay(s)
+        if self.state == "settings":
+            O.draw_settings(self, s)
+        elif self.overlay == "pause":
+            O.draw_pause(self, s)
+        elif self.overlay == "help":
+            O.draw_help(self, s)
+
+    def _panel_subtitles(self):
+        sub = {}
+        if self.online:
+            o = self.online
+            sub[o.side] = "Your AI on this computer" if o.local_ai else None
+            sub[OTHER[o.side]] = f"{o.remote_name}, playing online"
+        return sub
+
     def _draw_match(self, s):
+        self.sk.panels.SWITCH_HINT = "Press V to switch view"
         m, g = self.match, self.match.game
         hl, hover = (), None
         mouse = pygame.mouse.get_pos()
@@ -1051,16 +1170,12 @@ class App:
         draw_top(s, m, self.view, self.speed, self.paused, self.mode_label, self.t)
         left = pygame.Rect(16, T.TOP_H + 12, T.SIDE_W - 16, T.H - T.TOP_H - T.BOTTOM_H - 24)
         right = pygame.Rect(T.W - T.SIDE_W, T.TOP_H + 12, T.SIDE_W - 16, left.h)
-        sub = {}
-        if self.online:
-            o = self.online
-            sub[o.side] = "Your AI on this computer" if o.local_ai else None
-            sub[OTHER[o.side]] = f"{o.remote_name}, playing online"
+        sub = self._panel_subtitles()
         draw_red_panel(s, left, m, self.view, self.mode == "red", self._red_help(), subtitle=sub.get("red"),
                        can_switch=not self.online)
         draw_blue_panel(s, right, m, self.view, self.mode == "blue", self._blue_help(), subtitle=sub.get("blue"),
                         can_switch=not self.online)
-        draw_bottom(s, self._log_lines(), self._controls(), self.t)
+        self._chips = draw_bottom(s, self._log_lines(), self._controls(), self.t) or []
         for e in self.effects:
             if isinstance(e, fx.Flash) and self.view in getattr(e, "views", VIEWS):
                 e.draw(s)
@@ -1078,19 +1193,21 @@ class App:
             return None
         if self.pending_red is not None:
             return ["Move locked in. Waiting for Blue..."]
+        tap = "Tap" if self.phone else "Click"
         cut = ["CUT OFF: no link out is open.",
-               "Press S or SCOUT to pass the round.", ""] if self._red_cut_off() else []
-        return cut + ["Click a marked neighbour to move:",
+               ("Tap SCOUT" if self.phone else "Press S or SCOUT") + " to pass the round.", ""] \
+            if self._red_cut_off() else []
+        return cut + [f"{tap} a marked neighbour to move:",
                 "  free node: Capture (chance = weakness)",
                 "  across a zone gate: Unlock (loud)",
                 "  your own node: Advance (quiet)",
                 "  the database: Claim (wins)",
-                "S, SCOUT or your own node: Scout",
+                "SCOUT or your own node: Scout" if self.phone else "S, SCOUT or your own node: Scout",
                 "",
                 "Blue sees alerts, not you. Loud moves",
                 "and decoys give you away.",
                 "",
-                "H: all controls   Esc: pause"]
+                "MENU: pause, help, settings" if self.phone else "H: all controls   Esc: pause"]
 
     def _blue_help(self):
         if self.mode != "blue":
@@ -1101,12 +1218,18 @@ class App:
         for tool in TOOLS:
             sel = tool == self.human_tool
             cost = C.COST[tool]
-            lines.append((f"{'>' if sel else ' '} {keys[tool]}  {tool.title():8s} cost {cost}",
+            key = "" if self.phone else keys[tool] + "  "
+            lines.append((f"{'>' if sel else ' '} {key}{tool.title():8s} cost {cost}",
                           T.BLUE if sel else T.INK_2))
         lines.append(("", T.TEXT))
-        lines.append(("Pick a tool above the map, then click a node.", T.TEXT))
-        end = "Enter: end turn" if self.settings["confirm_turn"] else "Enter / auto at 0 AP"
-        lines.append((f"Backspace: undo   {end}", T.TEXT))
+        if self.phone:
+            lines.append(("Pick a tool below, then tap a node.", T.TEXT))
+            end = "END TURN" if self.settings["confirm_turn"] else "END TURN (auto at 0 AP)"
+            lines.append((f"UNDO takes one back.  {end}", T.TEXT))
+        else:
+            lines.append(("Pick a tool above the map, then click a node.", T.TEXT))
+            end = "Enter: end turn" if self.settings["confirm_turn"] else "Enter / auto at 0 AP"
+            lines.append((f"Backspace: undo   {end}", T.TEXT))
         lines.append(("", T.TEXT))
         for k, t in self.human_blue_acts:
             lines.append(("  " + blue_act_text(self.match.net, (k, t)), T.BLUE))
@@ -1127,11 +1250,23 @@ class App:
         return lines
 
     def _controls(self):
+        """The key legend under the map. Each chip can also be clicked or tapped."""
         if self.online:
+            if self.state == "result" and not self.online.closed:
+                return [("C", "chat"), ("R", "rematch"), ("N", "new map"), ("M", "leave game"), ("T", "theme"),
+                        ("ESC", "pause menu")]
             return [("C", "chat"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu"), ("M", "leave game")]
+        if self.state == "result":
+            return [("R", "replay this map"), ("N", "new map"), ("M", "main menu"), ("T", "theme"),
+                    ("H", "all controls"), ("ESC", "pause menu")]
         if self.mode == "ai":
             return [("SPACE", "play / pause"), ("N", "step one round"), ("V", "view (or 1 2 3, click)"), ("+ -", "speed"),
                     ("R", "restart map"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu")]
+        if self.mode == "red":
+            return [("S", "scout"), ("R", "restart map"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu")]
+        if self.mode == "blue":
+            return [("BKSP", "undo"), ("ENTER", "end turn"), ("R", "restart map"), ("T", "theme"),
+                    ("H", "all controls"), ("ESC", "pause menu")]
         return [("R", "restart map"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu")]
 
     # -- loop -----------------------------------------------------------------------------------

@@ -87,10 +87,13 @@ def _row(surf, x, y, label, value, vcol=T.TEXT, w=300):
     fx.text(surf, value, (x + w, y), 13, vcol, "semibold", anchor="topright")
 
 
+SWITCH_HINT = "Press V to switch view"     # ui/mobile.py swaps in the touch wording
+
+
 def _hidden(surf, rect, color, who, can_switch=True):
     fx.text(surf, f"Hidden in {who}'s view", (rect.centerx, rect.centery - 10), 15, T.scale(color, 0.8), "semibold",
             anchor="center")
-    fx.text(surf, "Press V to switch view" if can_switch else "Hidden by the fog of war",
+    fx.text(surf, SWITCH_HINT if can_switch else "Hidden by the fog of war",
             (rect.centerx, rect.centery + 14), 12, T.DIM, "medium", anchor="center")
 
 
@@ -281,6 +284,8 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
 
 
 def draw_bottom(surf, log_lines, controls, t):
+    """Returns [(keycap, rect)] so the key chips can be clicked or tapped too."""
+    chips = []
     r = pygame.Rect(0, T.H - T.BOTTOM_H, T.W, T.BOTTOM_H)
     pygame.draw.rect(surf, (7, 12, 28), r)
     pygame.draw.line(surf, T.PANEL_EDGE, r.topleft, r.topright)
@@ -297,6 +302,7 @@ def draw_bottom(surf, log_lines, controls, t):
         kw = f.size(keycap)[0] + 14
         lw = T.font(12, "medium").size(label)[0]
         kr = pygame.Rect(x - lw - kw - 8, y, kw, 22)
+        chips.append((keycap, pygame.Rect(kr.x - 4, kr.y - 2, x - kr.x + 8, 26)))
         pygame.draw.rect(surf, (20, 32, 60), kr, border_radius=5)
         pygame.draw.rect(surf, T.PANEL_EDGE, kr, 1, border_radius=5)
         fx.text(surf, keycap, kr.center, 11, T.TEXT, "bold", mono=True, anchor="center")
@@ -305,3 +311,4 @@ def draw_bottom(surf, log_lines, controls, t):
         if y > T.H - 30:
             y = r.y + 16
             x -= 230
+    return chips

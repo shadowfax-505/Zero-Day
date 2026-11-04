@@ -18,6 +18,7 @@ import time
 import pygame
 
 from net.peer import DEFAULT_PORT, Beacon, Peer, Scanner, local_ip
+from ui import device
 from net.relay import WEB, RelayPeer, default_relay_url, normalise_url, relay_override
 from net.session import Session
 from ui import theme as T     # rebound to the active skin's theme in Lobby.draw()
@@ -312,7 +313,8 @@ class Lobby:
     def handle(self, ev):
         """Returns 'back' to leave the lobby, otherwise None."""
         if self.state != "setup":
-            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+            tapped = (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1 and self.CANCEL.collidepoint(ev.pos))
+            if (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE) or tapped:
                 self._cancel()
                 self.status = ""
             return None
@@ -345,6 +347,8 @@ class Lobby:
                     row = rows[i]
                     if row in ("side", "player", "via"):
                         self._flip(row)
+                    elif row in self.ASK and device.WEB:
+                        return self._ask(row)
                     elif row not in ("name", "server") and not (row == "code" and len(self.code) != 4):
                         return self._activate(row)
         return None
@@ -402,24 +406,48 @@ class Lobby:
         else:
             self.code = "".join(c for c in text.upper() if c.isalpha())[:4]
 
+    ASK = {"name": "Your name", "ip": "The host's IP address", "server": "Relay server address",
+           "code": "The four-letter game code"}
+
+    def _ask(self, row):
+        """Browser (phones have no keyboard for the game): ask with the page's own text box, then go."""
+        cur = {"name": self.name, "ip": self.ip, "server": self.server, "code": self.code}[row]
+        text = device.ask_text(self.ASK[row], cur)
+        if text is None:
+            return None
+        cur = ""
+        for ch in text:
+            cur = self._add_char(row, cur, ch)
+        self._set_field(row, cur)
+        if row == "name":
+            self._prefs()
+        elif row == "server" or (row == "ip" and cur) or (row == "code" and len(cur) == 4):
+            return self._activate(row)
+        return None
+
+    @staticmethod
+    def _add_char(row, cur, ch):
+        limit = {"name": 16, "ip": 40, "server": 80, "code": 4}[row]
+        if row == "name":
+            ok = ch.isalnum() or ch in " _-"
+        elif row == "ip":
+            ok = ch in "0123456789.:abcdefghijklmnopqrstuvwxyz-"
+        elif row == "server":
+            ok = ch.isalnum() or ch in ".:/-_?=&%"
+        else:
+            ch = ch.upper()
+            ok = ch.isalpha()
+        return cur + ch if ok and len(cur) < limit else cur
+
     def _type(self, row, ev):
         cur = {"name": self.name, "ip": self.ip, "server": self.server, "code": self.code}[row]
-        limit = {"name": 16, "ip": 40, "server": 80, "code": 4}[row]
         if ev.key == pygame.K_BACKSPACE:
             cur = cur[:-1]
         elif ev.unicode and ev.unicode.isprintable() and not ev.mod & (pygame.KMOD_CTRL | pygame.KMOD_META):
-            ch = ev.unicode
-            if row == "name":
-                ok = ch.isalnum() or ch in " _-"
-            elif row == "ip":
-                ok = ch in "0123456789.:abcdefghijklmnopqrstuvwxyz-"
-            elif row == "server":
-                ok = ch.isalnum() or ch in ".:/-_?=&%"
-            else:
-                ch = ch.upper()
-                ok = ch.isalpha()
-            if ok and len(cur) < limit:
-                cur += ch
+            cur = self._add_char(row, cur, ev.unicode)
+        self._set_field(row, cur)
+
+    def _set_field(self, row, cur):
         if row == "name":
             self.name = cur
         elif row == "ip":
@@ -431,6 +459,7 @@ class Lobby:
 
     # -- drawing --------------------------------------------------------------------------
     X0 = 110
+    CANCEL = pygame.Rect(110, 720, 240, 52)          # shown while hosting / joining, for touch screens
 
     def _row_rects(self, n):
         rects = [pygame.Rect(self.X0, 300 + i * 56, 620, 48) for i in range(len(self.ROWS))]
@@ -450,6 +479,10 @@ class Lobby:
             self._draw_setup(s, t)
         else:
             self._draw_waiting(s, t)
+            r = self.CANCEL
+            pygame.draw.rect(s, T.PAPER, r)
+            pygame.draw.rect(s, T.INK, r, 2)
+            fx.spaced(s, "CANCEL", r.center, 20, T.INK, "bold", 2, anchor="center")
         fx.hrule(s, x0, T.W - 60, T.H - 52)
         hint = ("Up / Down: choose    Left / Right: change    Type to edit    Enter: go    Esc: back"
                 if self.state == "setup" else "Esc: cancel")
