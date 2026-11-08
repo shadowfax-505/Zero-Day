@@ -152,7 +152,7 @@ flowchart TB
     subgraph LAN["Direct: LAN or IP"]
         direction LR
         H1["Host<br/>full game copy"] <-- "TCP 5150<br/>one JSON line per move" --> J1["Joiner<br/>full game copy"]
-        H1 -. "UDP 5151 beacon<br/>'a game is here'" .-> J1
+        H1 -.->|"UDP 5151 beacon<br/>'a game is here'"| J1
     end
     subgraph WEB["Through the relay server"]
         direction LR
@@ -220,10 +220,10 @@ flowchart LR
         c1((" ")) --- c2((" ")) --- DB[("Database<br/>Red's goal")]
         c1 --- c3((" ")) --- DB
     end
-    d2 -. "gate" .- o1
-    d3 -. "gate" .- o4
-    o3 -. "gate" .- c1
-    o4 -. "gate" .- c3
+    d2 -.-|"gate"| o1
+    d3 -.-|"gate"| o4
+    o3 -.-|"gate"| c1
+    o4 -.-|"gate"| c3
 ```
 
 *A simplified map. Real maps have 30 to 38 nodes. Dotted lines are gated links between zones, which Red
@@ -246,10 +246,10 @@ sequenceDiagram
     and
         B->>G: a plan worth up to 3 AP (monitor, patch, decoy, isolate, restore)
     end
-    Note over G: 1. Blue's actions resolve first
-    Note over G: 2. Red's action resolves (cancelled if Blue cut it off)
-    Note over G: 3. Alert roll for Red's noise, plus 2% false alarms on every node
-    Note over G: 4. Win check: database claimed? Red removed? round 40 reached?
+    Note over G: Step 1: Blue's actions resolve first
+    Note over G: Step 2: Red's action resolves (cancelled if Blue cut it off)
+    Note over G: Step 3: Alert roll for Red's noise, plus 2% false alarms on every node
+    Note over G: Step 4: Win check: database claimed? Red removed? round 40 reached?
 ```
 
 **Red (one action per round)**
@@ -323,7 +323,7 @@ flowchart TB
         BA["Blue: BlueAI / Human / Random / Remote"]
     end
     RA & BA -- "actions" --> M
-    NET["net/ lockstep session"] -. "Remote player's moves" .-> RA & BA
+    NET["net/ lockstep session"] -.->|"Remote player's moves"| RA & BA
 ```
 
 The same `Match` drives every mode. In online play, the side played on the other computer is a
@@ -402,8 +402,8 @@ The GA was run as co-evolution, taking turns between the two sides:
 
 ```mermaid
 flowchart LR
-    B1["1. Tune Blue<br/>vs untuned Red<br/>41 generations"] --> R1["2. Tune Red<br/>vs that Blue<br/>8 generations"] --> B2["3. Tune Blue again<br/>vs tuned Red"]
-    B2 -. "lost its full-budget re-test,<br/>so round 1 weights kept" .-> B1
+    B1["Round 1: tune Blue<br/>vs untuned Red<br/>41 generations"] --> R1["Round 2: tune Red<br/>vs that Blue<br/>8 generations"] --> B2["Round 3: tune Blue again<br/>vs tuned Red"]
+    B2 -.->|"lost its full-budget re-test,<br/>so round 1 weights kept"| B1
 ```
 
 Baseline random agents for both sides live in `agents/baseline/`.
