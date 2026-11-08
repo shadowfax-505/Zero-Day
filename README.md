@@ -30,6 +30,20 @@ techniques, all written from scratch.
 - **Two themes**: Paper (default) and Dark, plus a settings screen and a pause menu.
 - A batch runner and a genetic algorithm to measure and tune the AIs.
 
+### The game at a glance
+
+```mermaid
+flowchart LR
+    R["🔴 Red AI<br/>intruder"] -- "one move per round" --> E
+    B["🔵 Blue AI<br/>defender"] -- "3 action points per round" --> E
+    E["Game engine<br/>(holds the true state)"]
+    E -- "only what Red has discovered<br/>(fog of war)" --> R
+    E -- "the full map + noisy alerts<br/>(never Red's position)" --> B
+    E --> W{"Who won?"}
+    W -- "Red claims the database" --> RW["Red wins"]
+    W -- "40 rounds survived, or Red removed" --> BW["Blue wins"]
+```
+
 ---
 
 ## Quick start
@@ -133,11 +147,45 @@ of war is real: Red never sees Blue's moves and Blue only sees alerts.
 human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat. After a match the
 host presses `R` (same map) or `N` (new map); the joiner's `R` / `N` asks the host for a rematch.
 
+```mermaid
+flowchart TB
+    subgraph LAN["Direct: LAN or IP"]
+        direction LR
+        H1["Host<br/>full game copy"] <-- "TCP 5150<br/>one JSON line per move" --> J1["Joiner<br/>full game copy"]
+        H1 -. "UDP 5151 beacon<br/>'a game is here'" .-> J1
+    end
+    subgraph WEB["Through the relay server"]
+        direction LR
+        H2["Host<br/>full game copy"] <-- "WebSocket" --> RS["Relay server<br/>4-letter room code<br/>passes messages along"]
+        RS <-- "WebSocket" --> J2["Joiner<br/>full game copy"]
+    end
+```
+
 How it works: both computers build the same map from the shared seed and the engine's dice are seeded
 from it too, so only the two moves travel over the network each round (one line of JSON over TCP, port
 5150). Every move carries a short fingerprint of the sender's game state, so a mismatch is caught at once, and
 the host then sends its full game state with its next move so the joiner's copy is repaired and the match
 carries on.
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant J as Joiner
+    J->>H: hello (name, version)
+    H->>J: start (seed, host's side)
+    Note over H,J: both build the same map and dice from the seed
+    loop every round
+        H->>J: move (my action + fingerprint of my state)
+        J->>H: move (my action + fingerprint of my state)
+        Note over H,J: each side applies both moves locally
+        alt fingerprints differ
+            H->>J: next move also carries the host's full state
+            Note over J: joiner adopts it and the match carries on
+        end
+    end
+    J->>H: rematch (same map or new map)
+    H->>J: start (new seed)
+```
 Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
 internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.
 If a firewall prompt appears the first time you host, allow it.
@@ -158,8 +206,51 @@ Every match uses a fresh network of 30 to 38 nodes in three zones: **DMZ** (with
 checks with breadth-first search that at least two node-disjoint routes lead from the gateway to the
 database, so Blue can never block every route at once. A seed makes every map repeatable.
 
+```mermaid
+flowchart LR
+    subgraph DMZ
+        GW(["Gateway<br/>Red starts here"]) --- d1((" ")) --- d2((" "))
+        GW --- d3((" ")) --- d2
+    end
+    subgraph Office
+        o1((" ")) --- o2((" ")) --- o3((" "))
+        o1 --- o4((" ")) --- o3
+    end
+    subgraph DC["Data Centre"]
+        c1((" ")) --- c2((" ")) --- DB[("Database<br/>Red's goal")]
+        c1 --- c3((" ")) --- DB
+    end
+    d2 -. "gate" .- o1
+    d3 -. "gate" .- o4
+    o3 -. "gate" .- c1
+    o4 -. "gate" .- c3
+```
+
+*A simplified map. Real maps have 30 to 38 nodes. Dotted lines are gated links between zones, which Red
+crosses with Unlock. The generator always leaves at least two separate routes from the gateway to the
+database.*
+
 A match lasts up to **40 rounds**. Both sides choose at the same time without seeing each other's choice.
 Blue's actions resolve first, then Red's. Then the engine rolls for alerts and checks who has won.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as Red
+    participant G as Game engine
+    participant B as Blue
+    G->>R: Red's observation (known nodes, own holdings, what it was hit by)
+    G->>B: Blue's observation (full map, last round's alerts, results of its tools)
+    par chosen at the same time
+        R->>G: one action (scout, capture, unlock, advance or claim)
+    and
+        B->>G: a plan worth up to 3 AP (monitor, patch, decoy, isolate, restore)
+    end
+    Note over G: 1. Blue's actions resolve first
+    Note over G: 2. Red's action resolves (cancelled if Blue cut it off)
+    Note over G: 3. Alert roll for Red's noise, plus 2% false alarms on every node
+    Note over G: 4. Win check: database claimed? Red removed? round 40 reached?
+```
 
 **Red (one action per round)**
 
@@ -188,6 +279,17 @@ Every node also has a 2% false-alarm chance each round. Blue never knows which a
 from the network (restoring every node it holds, ending with the gateway, which can only be sealed after
 round 15 and costs the whole turn).
 
+```mermaid
+stateDiagram-v2
+    [*] --> Playing: Red on the gateway, round 1
+    Playing --> Playing: next round
+    Playing --> RedWins: Claim on the database succeeds
+    Playing --> BlueWins: round 40 ends
+    Playing --> BlueWins: Red holds no node (gateway sealed after round 15)
+    RedWins --> [*]
+    BlueWins --> [*]
+```
+
 ---
 
 ## Gameplay
@@ -204,7 +306,55 @@ The engine owns the true state. Each agent only ever receives its own partial ob
 action (`choose_action(observation) -> action`), so neither AI can cheat. A human player is just another
 agent whose action comes from the mouse.
 
+```mermaid
+flowchart TB
+    subgraph Front["Who runs the match"]
+        UI["ui/ Pygame app<br/>(desktop and browser)"]
+        RUN["experiments/run_batch.py<br/>(headless)"]
+        GA["tuning/ga.py<br/>(headless)"]
+    end
+    UI & RUN & GA --> M["engine/match.py<br/>Match: asks both agents, applies the round"]
+    M --> G["engine/game.py<br/>Game: true state, rules, alert dice"]
+    MG["engine/mapgen.py<br/>seeded map generator"] --> G
+    G -- "red_observation()" --> RA
+    G -- "blue_observation()" --> BA
+    subgraph Agents["Agents"]
+        RA["Red: RedAI / Human / Random / Remote"]
+        BA["Blue: BlueAI / Human / Random / Remote"]
+    end
+    RA & BA -- "actions" --> M
+    NET["net/ lockstep session"] -. "Remote player's moves" .-> RA & BA
+```
+
+The same `Match` drives every mode. In online play, the side played on the other computer is a
+`RemotePlayer` whose moves arrive over the network instead of being computed.
+
 ### Red AI: plan a route, then gamble well
+
+```mermaid
+flowchart TB
+    O["Red's observation"] --> OM["Opponent model<br/>where Blue's defences showed up"]
+    OM --> L["Caution λ<br/>higher after being caught,<br/>lower late in the match"]
+    OM -- "P_decoy" --> A
+    L --> A["A* search<br/>cheapest route to the database"]
+    A --> S["A*'s next step"]
+    S --> MC["IS-MCTS check<br/>sample hidden worlds,<br/>score every legal move"]
+    MC --> T{"Clearly better<br/>move found?"}
+    T -- "yes (rare)" --> X["Play MCTS's move"]
+    T -- "no" --> Y["Play A*'s step"]
+```
+
+How one IS-MCTS search works, up to 1000 times or 200 ms per move:
+
+```mermaid
+flowchart TB
+    D["Determinise<br/>draw decoys, patches, monitored zones<br/>from the opponent model"] --> SE["Select<br/>UCT, c = 1.4"]
+    SE --> EX["Expand<br/>one untried move"]
+    EX --> RO["Rollout<br/>A*-guided Red vs learned Blue policy"]
+    RO --> LV["Score leaf<br/>learned win probability"]
+    LV --> BP["Back-propagate"]
+    BP --> D
+```
 
 | Technique | File | What it does |
 | --- | --- | --- |
@@ -214,12 +364,47 @@ agent whose action comes from the mouse.
 
 ### Blue AI: track the unseen, defend ahead
 
+```mermaid
+flowchart TB
+    O["Alerts + results of<br/>last round's tools"] --> PF["Particle filter<br/>2000 guesses about Red:<br/>predict, weight, resample"]
+    PF --> BEL["Belief map<br/>P(Red is here), P(Red holds this)"]
+    BEL --> FZ["Fuzzy triage<br/>alert × value × confidence<br/>→ threat 0 to 100"]
+    O --> FZ
+    FZ --> C["Candidate actions<br/>isolate, restore, patch,<br/>decoy, monitor"]
+    BEL --> C
+    C --> AL["All plans that fit 3 AP"]
+    AL --> MM["Minimax + alpha-beta<br/>2 rounds ahead vs<br/>Red's best reply from each likely spot"]
+    BEL -- "top 3 Red positions" --> MM
+    MM --> P["Blue's plan for this round"]
+```
+
 | Technique | File | What it does |
 | --- | --- | --- |
 | **Bayesian particle filter** | `agents/blue/particle_filter.py` | 2000 particles, each a full guess about Red: the node it stands on and the set of nodes it holds. Predict (move along a link, biased toward the database), update (weight by the likelihood of the alerts and by how well each held set explains Blue's own isolate/restore results), systematic resampling. The share of particles holding a node is P(Red holds it now), which drives restores. A sprung decoy collapses the belief onto one node. |
 | **Fuzzy logic triage** | `agents/blue/fuzzy.py` | A Mamdani system with triangular memberships turns alert strength, node value and belief confidence into a threat score from 0 to 100 (12 rules, centroid defuzzification). Below `watch` Blue ignores a node, above `act` it acts. |
 | **Minimax + alpha-beta pruning** | `agents/blue/stackelberg.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points, and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
 | **Genetic algorithm** | `tuning/ga.py` | Tunes either side offline (`--side blue` or `--side red`): Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) and Red's 6 (A\* caution λ and how it changes, and the two MCTS override thresholds). Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is the side's win rate against the other side's current AI (Blue also gets a bonus for locating Red early), measured with racing: everyone plays the first third of the maps, the better half the second third, the best quarter all of them. Weights are saved to `tuning/best_weights.json` (Blue) and `tuning/red_weights.json` (Red) and loaded automatically. |
+
+How the genetic algorithm tunes a side:
+
+```mermaid
+flowchart TB
+    P0["Population of weight sets<br/>(genomes)"] --> RC["Racing evaluation<br/>all play 1/3 of maps,<br/>best half 2/3, best quarter all"]
+    RC --> F["Fitness = win rate vs<br/>the other side's current AI"]
+    F --> SEL["Tournament selection (k = 3)<br/>+ keep the best 2"]
+    SEL --> XO["Uniform crossover"]
+    XO --> MU["Gaussian mutation"]
+    MU --> P0
+    F -- "best so far" --> J["tuning/best_weights.json (Blue)<br/>tuning/red_weights.json (Red)"]
+```
+
+The GA was run as co-evolution, taking turns between the two sides:
+
+```mermaid
+flowchart LR
+    B1["1. Tune Blue<br/>vs untuned Red<br/>41 generations"] --> R1["2. Tune Red<br/>vs that Blue<br/>8 generations"] --> B2["3. Tune Blue again<br/>vs tuned Red"]
+    B2 -. "lost its full-budget re-test,<br/>so round 1 weights kept" .-> B1
+```
 
 Baseline random agents for both sides live in `agents/baseline/`.
 
