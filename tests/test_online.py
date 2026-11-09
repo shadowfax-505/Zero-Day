@@ -113,3 +113,61 @@ def test_snapshot_round_trip():
     h.restore(json.loads(json.dumps(g.snapshot())))
     assert fingerprint(h) == fingerprint(g)
     assert h.red_observation() == g.red_observation()
+
+
+def _pair(side="red"):
+    port = random.randrange(20000, 40000)
+    host = Session(Peer.host(port), "host", "Alice", side=side)
+    client = Session(Peer.join("127.0.0.1", port), "client", "Bob")
+    _pump([host, client], lambda e: host.greeted)
+    host.start(11)
+    _pump([host, client], lambda e: client.seed == 11)
+    return host, client
+
+
+def _has(evs, s, kind):
+    return any(x[0] == kind for x in evs[id(s)])
+
+
+def test_rematch_needs_both_players():
+    host, client = _pair("red")
+    # the joiner asks for a rematch with sides swapped: nothing starts until the host agrees
+    assert client.offer_rematch(False, swap=True) == "sent"
+    ev = _pump([host, client], lambda e: _has(e, host, "offer"))
+    assert ("offer", False, True) in ev[id(host)]
+    assert host.their_offer == (False, True) and host.match_id == 1
+    # the host accepts: it swaps sides and starts match 2 on the same map
+    assert host.accept_rematch() == (False, True)
+    host.swap_sides()
+    host.start(11)
+    _pump([host, client], lambda e: client.match_id == 2)
+    assert host.side == "blue" and client.side == "red"
+    assert host.their_offer is None and client.my_offer is None
+
+
+def test_rematch_accepted_by_the_joiner_and_declined():
+    host, client = _pair("blue")
+    host.offer_rematch(True)
+    _pump([host, client], lambda e: _has(e, client, "offer"))
+    client.decline_rematch()
+    ev = _pump([host, client], lambda e: _has(e, host, "declined"))
+    assert host.my_offer is None
+    # ask again; the joiner presses the same rematch, which accepts it, and the host gets 'go'
+    host.offer_rematch(True)
+    _pump([host, client], lambda e: client.their_offer == (True, False))
+    assert client.offer_rematch(True) == "accepted"
+    ev = _pump([host, client], lambda e: _has(e, host, "go"))
+    assert ("go", True, False) in ev[id(host)]
+
+
+def test_rematch_when_both_ask_at_once_starts_one_match():
+    host, client = _pair("red")
+    host.offer_rematch(False)
+    client.offer_rematch(False)
+    ev = _pump([host, client], lambda e: _has(e, host, "go"))
+    assert sum(x[0] == "go" for x in ev[id(host)]) == 1
+    host.start(11)
+    ev = _pump([host, client], lambda e: client.match_id == 2, timeout=1.0)
+    time.sleep(0.1)
+    late = host.poll()               # a stale accept from the old match must not start a third one
+    assert not any(x[0] == "go" for x in late) and host.match_id == 2

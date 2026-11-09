@@ -130,5 +130,5 @@ def draw_result(app, s):
         x = x0 + i * 260
         fx.spaced(s, lab, (x, cy + 70), 10, T.MUTED, "bold", 2, anchor="midtop")
         fx.text(s, val, (x, cy + 92), 26, T.WHITE, "bold", anchor="midtop")
-    fx.text(s, "R  replay this map      N  new map      M  menu", (cx, cy + 170), 15, T.MUTED, "medium",
+    fx.text(s, ("R  rematch      N  new map      S  swap sides" if app.online else "R  replay this map      N  new map      M  menu"), (cx, cy + 170), 15, T.MUTED, "medium",
             mono=True, anchor="center")

@@ -144,8 +144,14 @@ the sides and the joiner gets the other one. Each player only ever sees their ow
 of war is real: Red never sees Blue's moves and Blue only sees alerts.
 
 **WHO PLAYS IT** decides whether you play or your AI plays for you, so the same screen covers human vs
-human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat. After a match the
-host presses `R` (same map) or `N` (new map); the joiner's `R` / `N` asks the host for a rematch.
+human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat.
+
+**Rematch.** After a match either player can ask for a rematch: `R` on the same map, `N` on a new map,
+or `S` on the same map with the sides swapped (on a phone, the REMATCH / NEW MAP / SWAP SIDES buttons).
+The other player sees the offer and presses `Y` to accept or `X` to say no thanks; asking for the same
+rematch they offered also accepts it. The new match starts on both screens without going back to the
+lobby, over LAN and through the server alike. The pause menu's *Restart* and *New map* send the same
+offer in the middle of a match.
 
 ```mermaid
 flowchart TB
@@ -183,8 +189,9 @@ sequenceDiagram
             Note over J: joiner adopts it and the match carries on
         end
     end
-    J->>H: rematch (same map or new map)
-    H->>J: start (new seed)
+    J->>H: rematch offer (same/new map, swap sides?)
+    H->>J: rematch offer back = accepted (or rematch_no)
+    H->>J: start (seed, host's side, match + 1)
 ```
 Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
 internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.

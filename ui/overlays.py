@@ -200,6 +200,10 @@ def help_lines(app):
         return touch_help_lines(app)
     common = [("Esc", "pause menu"), ("H", "show / hide this help"), ("M", "main menu"), ("R", "restart this map"),
               ("F11", "fullscreen"), ("F12", "screenshot"), ("T", "switch theme")]
+    if getattr(app, "online", None):
+        common[2:4] = [("M", "leave the game"), ("C", "chat"),
+                       ("R N S", "rematch: same map / new map / swap sides"),
+                       ("Y  X", "accept / turn down a rematch")]
     if app.mode == "ai":
         return "AI vs AI", [("Space", "play / pause"), ("N", "step one round"), ("V", "cycle view"),
                             ("1 2 3", "Red / full / Blue view"), ("+ -", "speed 0.5x to 4x")] + common
@@ -216,6 +220,7 @@ def touch_help_lines(app):
               ("Tap a node", "see what is known about it")]
     if getattr(app, "online", None):
         common.insert(1, ("CHAT", "send your opponent a message"))
+        common.insert(2, ("REMATCH", "after a match: same map, new map or swap sides"))
     if app.mode == "ai":
         return "AI vs AI", [("PLAY / PAUSE", "run or hold the match"), ("STEP", "play one round"),
                             ("VIEW", "Red's, the full or Blue's view"), ("SPEED", "0.5x to 4x")] + common

@@ -15,7 +15,7 @@ import socket
 import threading
 import time
 
-PROTOCOL = 1
+PROTOCOL = 2
 DEFAULT_PORT = 5150
 BEACON_PORT = 5151          # UDP: hosts announce themselves here once a second
 

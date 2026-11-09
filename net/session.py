@@ -5,7 +5,11 @@
     both             move    {match, round, act, fp}             fp = state fingerprint before the move
     host -> client   move    {..., state}                        after a desync: the host's full state,
                                                                  which the client adopts before the round
-    client -> host   rematch {new_map}                           host answers with a new start
+    both             rematch    {match, new_map, swap}           offer a rematch (same or new map, sides kept
+                                                                 or swapped); the same offer back accepts it
+    client -> host   rematch_ok {match, new_map, swap}           the joiner accepts the host's offer
+    both             rematch_no {match}                          turn the offer down
+                     the host starts every rematch with a new 'start' (host_side tells the joiner its side)
     both             chat    {text}
     both             bye
 """
@@ -57,6 +61,8 @@ class Session:
         self.resync_needed = False        # host: send the full state with the next move
         self.resync_state = {}            # client: round -> host state to adopt before that round
         self.state_sent_round = None
+        self.my_offer = None              # (new_map, swap) this side asked for, current match only
+        self.their_offer = None           # (new_map, swap) the other side asked for
         self.closed = False
         self.greeted = False
         if role == "client":
@@ -98,8 +104,34 @@ class Session:
         self.resyncs += 1
         return True
 
-    def request_rematch(self, new_map):
-        self.peer.send({"t": "rematch", "new_map": bool(new_map)})
+    def offer_rematch(self, new_map, swap=False):
+        """Ask for a rematch. Returns 'go' (host: both want this one, start it now), 'accepted'
+        (joiner: took the host's matching offer) or 'sent'."""
+        opt = (bool(new_map), bool(swap))
+        if self.their_offer == opt:
+            return self.accept_rematch() and ("go" if self.role == "host" else "accepted")
+        self.my_offer = opt
+        self.peer.send({"t": "rematch", "match": self.match_id, "new_map": opt[0], "swap": opt[1]})
+        return "sent"
+
+    def accept_rematch(self):
+        """Take the other side's offer. Host: returns the offer to start now. Joiner: tells the host."""
+        opt = self.their_offer
+        if opt is None:
+            return None
+        if self.role == "client":
+            self.peer.send({"t": "rematch_ok", "match": self.match_id, "new_map": opt[0], "swap": opt[1]})
+            self.my_offer = opt
+        return opt
+
+    def decline_rematch(self):
+        if self.their_offer is not None:
+            self.their_offer = None
+            self.peer.send({"t": "rematch_no", "match": self.match_id})
+
+    def swap_sides(self):
+        """Host: play the other side in the next match (sent to the joiner with 'start')."""
+        self.side = OTHER[self.side]
 
     def chat(self, text):
         self.peer.send({"t": "chat", "text": text[:120]})
@@ -110,6 +142,8 @@ class Session:
 
     # -- incoming -------------------------------------------------------------------
     def _reset_round_state(self):
+        self.my_offer = None
+        self.their_offer = None
         self.moves = {}
         self.my_fp = {}
         self.sent_round = None
@@ -132,7 +166,10 @@ class Session:
 
     def poll(self):
         """Handle network traffic. Returns UI events:
-        ('start', seed) ('chat', who, text) ('rematch', new_map) ('hello', name) ('closed', why) ('error', why)"""
+        ('start', seed) ('chat', who, text) ('hello', name) ('closed', why) ('error', why)
+        ('offer', new_map, swap)   the other side asks for a rematch
+        ('go', new_map, swap)      host only: both agreed, start the rematch now
+        ('declined',)              the other side turned our offer down"""
         out = []
         for m in self.peer.poll():
             t = m.get("t")
@@ -159,8 +196,25 @@ class Session:
                         self.resync_state[rnd] = m["state"]
                         fp = None        # compare again once the state is adopted
                     self.moves[rnd] = (unpack(OTHER[self.side], m["act"]), fp)
-            elif t == "rematch" and self.role == "host":
-                out.append(("rematch", bool(m.get("new_map"))))
+            elif t in ("rematch", "rematch_ok", "rematch_no"):
+                if int(m.get("match", -1)) != self.match_id:
+                    continue                         # about a match that is already over
+                opt = (bool(m.get("new_map")), bool(m.get("swap")))
+                if t == "rematch_no":
+                    if self.my_offer is not None:
+                        self.my_offer = None
+                        out.append(("declined",))
+                elif t == "rematch_ok":
+                    if self.role == "host" and self.my_offer == opt:
+                        out.append(("go",) + opt)
+                else:
+                    self.their_offer = opt
+                    if self.my_offer == opt:
+                        if self.role == "host":     # we both asked for the same thing
+                            out.append(("go",) + opt)
+                        # joiner: the host got our matching offer too and will start
+                    else:
+                        out.append(("offer",) + opt)
             elif t == "chat":
                 out.append(("chat", self.remote_name, str(m.get("text", ""))[:120]))
             elif t in ("bye", "_closed"):
