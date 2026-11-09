@@ -108,6 +108,15 @@ def test_lockstep_match_through_relay(relay_url):
     ev = _pump([host, client], lambda e: any(x[0] == "chat" for x in e[id(host)]))
     assert ("chat", "Bob", "gg") in ev[id(host)]
 
+    # rematch with sides swapped: the joiner asks, the host accepts, both are in match 2
+    client.offer_rematch(False, swap=True)
+    _pump([host, client], lambda e: host.their_offer == (False, True))
+    assert host.offer_rematch(False, swap=True) == "go"
+    host.swap_sides()
+    host.start(4321)
+    _pump([host, client], lambda e: client.match_id == 2)
+    assert host.side == "red" and client.side == "blue"
+
     client.close()
     _pump([host, client], lambda e: any(x[0] == "closed" for x in e[id(host)]))
     host.close()

@@ -210,7 +210,6 @@ class App:
         label = f"ONLINE  /  {who} ({side.upper()}) VS {o.remote_name.upper()}"
         self.online_note = None
         self.chat_text = None
-        self._asked_rematch = False
         self._desync_logged = False
         self._begin("netai" if o.local_ai else side, red, blue, generate(o.seed), label)
         self.view = side            # fog of war: you only ever see your own side's view
@@ -424,31 +423,67 @@ class App:
         self.online_note = None
         self.chat_text = None
 
-    def _online_restart(self, new_map):
-        """Host: start the next match (same map or a fresh one) on both machines."""
+    def _online_restart(self, new_map, swap=False):
+        """Host: start the next match (same map or a fresh one, sides kept or swapped) on both machines."""
         if new_map:
             self.seed = random.randrange(1, 100000)
+        if swap:
+            self.online.swap_sides()
         self.online.start(self.seed)
         self.start_online_match()
 
-    def _online_rematch(self, new_map):
-        """R / N (or the pause menu) while online: the host restarts, the joiner asks the host."""
-        if self.online.closed:
+    @staticmethod
+    def rematch_text(opt):
+        new_map, swap = opt
+        where = "a new map" if new_map else "the same map"
+        return where + (", sides swapped" if swap else "")
+
+    def _online_rematch(self, new_map, swap=False):
+        """R / N / S (or the pause menu) while online: offer a rematch. Both players have to agree;
+        asking for the same rematch the other player already offered accepts it."""
+        o = self.online
+        if o.closed or o.my_offer == (bool(new_map), bool(swap)):
             return
-        if self.online.role == "host":
-            self._online_restart(new_map)
-        elif not getattr(self, "_asked_rematch", False):
-            self._asked_rematch = True
-            self.online.request_rematch(new_map)
-            self.log.append((self.match.game.round, "muted", f"Asked {self.online.remote_name} for a rematch."))
+        res = o.offer_rematch(new_map, swap)
+        rnd = self.match.game.round
+        if res == "go":
+            self._online_restart(new_map, swap)
+        elif res == "accepted":
+            self.log.append((rnd, "muted", f"Rematch on {self.rematch_text((new_map, swap))}. Starting..."))
+        else:
+            self.log.append((rnd, "muted", f"Asked {o.remote_name} for a rematch on "
+                                           f"{self.rematch_text((new_map, swap))}."))
+
+    def _online_accept(self):
+        o = self.online
+        if o.closed or o.their_offer is None:
+            return
+        opt = o.accept_rematch()
+        if o.role == "host":
+            self._online_restart(*opt)
+        else:
+            self.log.append((self.match.game.round, "muted", f"Rematch on {self.rematch_text(opt)}. Starting..."))
+
+    def _online_decline(self):
+        o = self.online
+        if o.closed or o.their_offer is None:
+            return
+        o.decline_rematch()
+        self.log.append((self.match.game.round, "muted", "You turned the rematch down."))
 
     def _online_tick(self):
         o = self.online
         for ev in o.poll():
             if ev[0] == "start":
                 self.start_online_match()
-            elif ev[0] == "rematch":
-                self._online_restart(ev[1])
+            elif ev[0] == "go":
+                self._online_restart(ev[1], ev[2])
+            elif ev[0] == "offer":
+                self.log.append((self.match.game.round, "text",
+                                 f"{o.remote_name} wants a rematch on {self.rematch_text(ev[1:])}."))
+                self.sound.play("click")
+            elif ev[0] == "declined":
+                self.log.append((self.match.game.round, "muted", f"{o.remote_name} turned the rematch down."))
             elif ev[0] == "chat":
                 self.log.append((self.match.game.round, "text", f"{ev[1]}: {ev[2]}"))
                 self.sound.play("click")
@@ -528,21 +563,37 @@ class App:
             mine = o.side
             g = self.match.game
             won = g.winner == mine
+            status, scol = None, T.INK_2
             if o.closed:
                 keys = "M  menu"
-            elif o.role == "client" and self._asked_rematch:
-                keys = f"Asked {o.remote_name} for a rematch...   M  menu"
-            elif o.role == "client":
-                keys = "R / N  ask the host for a rematch   C  chat   M  menu"
             else:
-                keys = "R  rematch on this map   N  new map   C  chat   M  menu"
-            box = pygame.Rect(0, 0, 760, 48)
-            box.center = (W // 2, H - 70)
+                keys = "R  same map   N  new map   S  swap sides   C  chat   M  menu"
+                if o.their_offer is not None:
+                    status = f"{o.remote_name} wants a rematch on {self.rematch_text(o.their_offer)}."
+                    status += "   Y  accept   X  no thanks"
+                    scol = T.RED if mine == "red" else T.BLUE
+                elif o.my_offer is not None:
+                    status = f"Waiting for {o.remote_name} to accept a rematch on {self.rematch_text(o.my_offer)}..."
+            box = pygame.Rect(0, 0, 760, 74 if status else 48)
+            box.center = (W // 2, H - 70 - (13 if status else 0))
             pygame.draw.rect(s, T.PAPER, box)
             pygame.draw.rect(s, T.RED if g.winner == "red" else T.BLUE, box, 2)
-            fx.spaced(s, "YOU WIN" if won else "YOU LOSE", (box.x + 20, box.centery), 20,
+            top = pygame.Rect(box.x, box.y, box.w, 48)
+            fx.spaced(s, "YOU WIN" if won else "YOU LOSE", (box.x + 20, top.centery), 20,
                       T.RED if g.winner == "red" else T.BLUE, "bold", 2, anchor="midleft")
-            fx.text(s, keys, (box.right - 16, box.centery), 13, T.INK_2, "medium", mono=True, anchor="midright")
+            fx.text(s, keys, (box.right - 16, top.centery), 13, T.INK_2, "medium", mono=True, anchor="midright")
+            if status:
+                fx.text(s, status, (box.x + 20, box.bottom - 16), 13, scol, "semibold", mono=True, anchor="midleft")
+        elif self.state == "match" and self.overlay is None and not o.closed and o.their_offer is not None:
+            r = self.board.rect
+            msg = f"{o.remote_name} wants a rematch on {self.rematch_text(o.their_offer)}."
+            if not self.phone:
+                msg += "   Y  accept   X  no thanks"
+            card = pygame.Rect(0, 0, min(r.w - 16, 12 + 8 * len(msg)), 34)
+            card.midtop = (r.centerx, r.y + 58)
+            pygame.draw.rect(s, T.PAPER, card)
+            pygame.draw.rect(s, T.INK, card, 2)
+            fx.text(s, msg, card.center, 13, T.INK, "semibold", mono=True, anchor="center")
         if self.chat_text is not None:
             if self.phone:
                 br = self.board.rect
@@ -818,8 +869,15 @@ class App:
                 if k == pygame.K_c:
                     self.chat_text = ""
                     return True
-                if self.state == "result" and k in (pygame.K_r, pygame.K_n, pygame.K_RETURN):
-                    self._online_rematch(k != pygame.K_r)
+                if k == pygame.K_y or (k == pygame.K_RETURN and self.state == "result"
+                                       and self.online.their_offer is not None):
+                    self._online_accept()
+                    return True
+                if k == pygame.K_x and self.online.their_offer is not None:
+                    self._online_decline()
+                    return True
+                if self.state == "result" and k in (pygame.K_r, pygame.K_n, pygame.K_s, pygame.K_RETURN):
+                    self._online_rematch(k in (pygame.K_n, pygame.K_RETURN), k == pygame.K_s)
                     return True
                 if k in (pygame.K_r, pygame.K_n):
                     return True
@@ -880,6 +938,7 @@ class App:
 
     CHIP_KEYS = {"SPACE": pygame.K_SPACE, "N": pygame.K_n, "V": pygame.K_v, "R": pygame.K_r, "T": pygame.K_t,
                  "H": pygame.K_h, "ESC": pygame.K_ESCAPE, "C": pygame.K_c, "M": pygame.K_m, "S": pygame.K_s,
+                 "Y": pygame.K_y, "X": pygame.K_x,
                  "BKSP": pygame.K_BACKSPACE, "ENTER": pygame.K_RETURN}
 
     def _press_chip(self, keycap):
@@ -1292,8 +1351,12 @@ class App:
         """The key legend under the map. Each chip can also be clicked or tapped."""
         if self.online:
             if self.state == "result" and not self.online.closed:
-                return [("C", "chat"), ("R", "rematch"), ("N", "new map"), ("M", "leave game"), ("T", "theme"),
-                        ("ESC", "pause menu")]
+                chips = [("Y", "accept"), ("X", "no thanks")] if self.online.their_offer else []
+                return chips + [("R", "rematch"), ("N", "new map"), ("S", "swap sides"), ("C", "chat"),
+                                ("M", "leave game"), ("ESC", "pause menu")]
+            if self.online.their_offer is not None and not self.online.closed:
+                return [("Y", "accept rematch"), ("X", "no thanks"), ("C", "chat"), ("ESC", "pause menu"),
+                        ("M", "leave game")]
             return [("C", "chat"), ("T", "theme"), ("H", "all controls"), ("ESC", "pause menu"), ("M", "leave game")]
         if self.state == "result":
             return [("R", "replay this map"), ("N", "new map"), ("M", "main menu"), ("T", "theme"),

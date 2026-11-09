@@ -149,5 +149,5 @@ def draw_result(app, s):
         fx.text(s, lab, (cx, y + 14), 12, T.INK_2, "regular")
         fx.text(s, val, (cx, y + 34), 28, T.INK, "medium", mono=True)
     fx.hrule(s, x, card.right - 48, y + 84)
-    fx.text(s, "R  replay this map      N  new map      M  menu", (x, card.bottom - 30), 14, T.INK_2, "regular",
+    fx.text(s, ("R  rematch      N  new map      S  swap sides" if app.online else "R  replay this map      N  new map      M  menu"), (x, card.bottom - 30), 14, T.INK_2, "regular",
             mono=True, anchor="midleft")

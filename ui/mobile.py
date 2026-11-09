@@ -36,7 +36,11 @@ def _k(key):
 
 # -- geometry ------------------------------------------------------------------------------
 def _bar_rows(app, mode):
-    return 2 if app.layout == "portrait" and mode == "blue" else 1
+    if app.layout != "portrait":
+        return 1
+    if mode == "blue" or (app.state == "result" and app.online and not app.online.closed):
+        return 2
+    return 1
 
 
 def match_rects(app, mode=None):
@@ -93,20 +97,24 @@ def bar_buttons(app):
     o = app.online
     if app.state == "result":
         if o:
-            row = []
-            if not o.closed:
-                if o.role == "host":
-                    row += [Btn("rematch", "REMATCH"), Btn("newmap", "NEW MAP")]
-                else:
-                    asked = getattr(app, "_asked_rematch", False)
-                    row.append(Btn("rematch", "ASKED" if asked else "REMATCH", enabled=not asked))
-                row.append(Btn("chat", "CHAT"))
-            row.append(Btn("home", "LEAVE"))
-            return [row]
+            if o.closed:
+                return [[Btn("home", "LEAVE")]]
+            if o.their_offer is not None:
+                offers = [Btn("accept", "ACCEPT", app.rematch_text(o.their_offer).replace("the ", ""), hot=True),
+                          Btn("decline", "NO THANKS")]
+            else:
+                mine = o.my_offer
+                offers = [Btn(bid, label, "asked" if mine == opt else None, on=mine == opt)
+                          for bid, label, opt in (("rematch", "REMATCH", (False, False)),
+                                                  ("newmap", "NEW MAP", (True, False)),
+                                                  ("swap", "SWAP SIDES", (False, True)))]
+            rest = [Btn("chat", "CHAT"), Btn("home", "LEAVE")]
+            return [offers, rest] if app.layout == "portrait" else [offers + rest]
         return [[Btn("replay", "REPLAY"), Btn("new", "NEW MAP"), Btn("home", "MAIN MENU")]]
     think = app.state == "match" and app.phase == "think"
     menu = Btn("menu", "MENU")
     chat = [Btn("chat", "CHAT")] if o else []
+    accept = [Btn("accept", "REMATCH?", "accept", hot=True)] if o and not o.closed and o.their_offer else []
     if app.mode == "ai":
         return [[Btn("play", "PLAY" if app.paused else "PAUSE", on=app.paused, accent=T.STRONG),
                  Btn("step", "STEP", enabled=app.paused),
@@ -116,7 +124,7 @@ def bar_buttons(app):
         can = think and app.pending_red is None
         cut = can and app._red_cut_off()
         return [[Btn("scout", "SCOUT", "and pass" if cut else "nearby", accent=T.RED, enabled=can, hot=cut)]
-                + chat + [menu]]
+                + accept + chat + [menu]]
     if app.mode == "blue":
         can = think and app.pending_blue is None
         ap = app._human_blue_ap() if can else 0
@@ -126,9 +134,9 @@ def bar_buttons(app):
         acts = [Btn("undo", "UNDO", enabled=can and bool(app.human_blue_acts)),
                 Btn("end", "END TURN", f"{ap} AP left" if can else "wait", accent=T.BLUE, hot=stuck, enabled=can)]
         if app.layout == "portrait":
-            return [tools, acts + chat + [menu]]
-        return [tools + acts + chat + [menu]]
-    return [chat + [menu]]                              # online, your AI plays your side
+            return [tools, acts + accept + chat + [menu]]
+        return [tools + acts + accept + chat + [menu]]
+    return [accept + chat + [menu]]                     # online, your AI plays your side
 
 
 def layout_bar(app, rows, bar):
@@ -173,8 +181,12 @@ def press(app, bid):
         app.speed_i = (app.speed_i + 1) % len(SPEEDS)
     elif bid == "chat":
         open_chat(app)
-    elif bid in ("rematch", "newmap"):
-        app._online_rematch(bid == "newmap")
+    elif bid in ("rematch", "newmap", "swap"):
+        app._online_rematch(bid == "newmap", bid == "swap")
+    elif bid == "accept":
+        app._online_accept()
+    elif bid == "decline":
+        app._online_decline()
     elif bid in keys:
         app.handle(_k(keys[bid]))
 
