@@ -105,11 +105,11 @@ def red_tree(net, root, depth=2, top=4):
     def walk(node, d):
         kids = sorted(node.children.values(), key=lambda c: -c.n)
         out = []
-        for c in kids[:top]:
+        for c in (kids if d == 1 else kids[:top]):
             out.append({"action": act_str(net, c.action) if c.action[0] != "fog" else "into the fog",
                         "n": c.n, "q": r3(c.w / c.n) if c.n else None, "avail": c.avail,
                         "children": walk(c, d + 1) if d < depth else [],
-                        "more": max(0, len(node.children) - top) if False else 0})
+                        "kids": len(c.children)})
         return out
     return walk(root, 1)
 
