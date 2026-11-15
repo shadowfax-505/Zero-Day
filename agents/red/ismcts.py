@@ -312,6 +312,7 @@ class ISMCTS:
         self.obvious = {}
         h0 = max(1.0, self.ctg.get(obs.pos, 10.0) + 2.0)
         root = TreeNode()
+        self.root = root          # kept so the decision trace can print the tree
         cands = list(dict.fromkeys(candidates))
         for a in cands:
             root.children[a] = TreeNode(a, root)

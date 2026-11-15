@@ -307,6 +307,13 @@ Recordings of the three modes, captured from the game itself:
 - [AI vs AI](docs/gameplay/ai-vs-ai.mp4): map 42, switching between the full, Red and Blue views
 - [Online](docs/gameplay/online.mp4): two connected copies side by side, host as Red, joiner as Blue
 
+Sped-up versions, whole matches:
+
+- [AI vs AI, map 42 at 2x](docs/gameplay/ai-vs-ai-map42-2x.mp4): Red claims the database in round 15
+  (round 5 of this match is the one traced step by step in the report)
+- [AI vs AI, map 1 at 4x](docs/gameplay/ai-vs-ai-map1-4x.mp4): Blue holds out for all 40 rounds
+- [Human vs AI at 2x](docs/gameplay/human-vs-ai-2x.mp4) and [Online at 2x](docs/gameplay/online-2x.mp4)
+
 ## The AIs
 
 The engine owns the true state. Each agent only ever receives its own partial observation and returns an
@@ -426,7 +433,14 @@ python -m tuning.learn_from_matches --matches 160       # re-learn MCTS's Blue m
 python -m tuning.ga --side red --pop 14 --gens 8 --matches 30     # tune Red against the current Blue
 python -m tuning.ga --side blue --seed-from tuning/best_weights.json   # tune Blue (warm start)
 python -m tuning.ga --resume                            # continue a stopped GA run
+python -m experiments.trace_scenario --seed 42 --round 5   # every number both AIs used in one round
 ```
+
+`trace_scenario` replays a Red AI vs Blue AI match up to the given round and prints the whole
+decision: Red's opponent model, the A\* expansions with g, h and f, the IS-MCTS tree and the paired
+test, Blue's particle filter (prior, likelihood, posterior), the fuzzy rules that fired, and the
+minimax tree with the alpha-beta cut-offs. It checks its numbers against what the AIs really
+returned, so the trace in the report is the game's own reasoning.
 
 100 matches per pairing on the same fixed seeds (maps 1 to 100), full search budgets, both AIs using
 their GA-tuned weights:
