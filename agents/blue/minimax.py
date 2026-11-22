@@ -1,4 +1,4 @@
-"""Stackelberg minimax: choose the defence (outline section 06, part 3).
+"""Minimax with alpha-beta pruning: choose the defence (outline section 06, part 3).
 
 The defender commits first and the intruder reacts. Blue builds candidate
 allocations of its 3 action points over the highest-threat nodes and, for
@@ -33,7 +33,7 @@ class PlanState:
         return (self.isolated, tuple(round(w, 3) for w in self.weak))
 
 
-class Stackelberg:
+class MinimaxPlanner:
     def __init__(self, net, weights):
         self.net = net
         self.w = weights
