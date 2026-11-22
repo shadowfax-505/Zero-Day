@@ -396,7 +396,7 @@ flowchart TB
 | --- | --- | --- |
 | **Bayesian particle filter** | `agents/blue/particle_filter.py` | 2000 particles, each a full guess about Red: the node it stands on and the set of nodes it holds. Predict (move along a link, biased toward the database), update (weight by the likelihood of the alerts and by how well each held set explains Blue's own isolate/restore results), systematic resampling. The share of particles holding a node is P(Red holds it now), which drives restores. A sprung decoy collapses the belief onto one node. |
 | **Fuzzy logic triage** | `agents/blue/fuzzy.py` | A Mamdani system with triangular memberships turns alert strength, node value and belief confidence into a threat score from 0 to 100 (12 rules, centroid defuzzification). Below `watch` Blue ignores a node, above `act` it acts. |
-| **Minimax + alpha-beta pruning** | `agents/blue/stackelberg.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points, and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
+| **Minimax + alpha-beta pruning** | `agents/blue/minimax.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points, and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
 | **Genetic algorithm** | `tuning/ga.py` | Tunes either side offline (`--side blue` or `--side red`): Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) and Red's 6 (A\* caution λ and how it changes, and the two MCTS override thresholds). Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is the side's win rate against the other side's current AI (Blue also gets a bonus for locating Red early), measured with racing: everyone plays the first third of the maps, the better half the second third, the best quarter all of them. Weights are saved to `tuning/best_weights.json` (Blue) and `tuning/red_weights.json` (Red) and loaded automatically. |
 
 How the genetic algorithm tunes a side:
@@ -489,7 +489,7 @@ What this shows:
 ```
 engine/          game state, rules, alert model, map generator, observations, match runner
 agents/red/      astar.py, ismcts.py, opponent_model.py, agent.py
-agents/blue/     particle_filter.py, fuzzy.py, stackelberg.py, agent.py
+agents/blue/     particle_filter.py, fuzzy.py, minimax.py, agent.py
 agents/baseline/ random agents for both sides
 tuning/          ga.py (both sides), learn_from_matches.py, tuned weights, learned MCTS models, fitness curves
 ui/              Pygame app: menu, online lobby, network renderer, panels, effects, human input

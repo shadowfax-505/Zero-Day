@@ -8,7 +8,7 @@ import numpy as np
 from agents.base import Agent
 from agents.blue.fuzzy import FuzzyTriage
 from agents.blue.particle_filter import ParticleFilter
-from agents.blue.stackelberg import Stackelberg, PlanState, allocations
+from agents.blue.minimax import MinimaxPlanner, PlanState, allocations
 from engine import config as C
 
 # The genome the GA tunes (tuning/ga.py). Bounds are (low, high).
@@ -69,7 +69,7 @@ class BlueAI(Agent):
         self.net = net
         self.pf = ParticleFilter(net, self.n_particles, stay=w["stay"], toward_db=w["toward_db"], seed=self.seed)
         self.fuzzy = FuzzyTriage(w["alert_mid"], w["conf_mid"], w["watch"], w["act"])
-        self.planner = Stackelberg(net, w)
+        self.planner = MinimaxPlanner(net, w)
         self.alert_mem = np.zeros(net.n)
 
     # -- belief ------------------------------------------------------------------

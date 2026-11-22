@@ -28,7 +28,7 @@ import numpy as np
 
 from agents.blue.agent import BlueAI
 from agents.blue.fuzzy import RULES, OUT, OUT_SETS
-from agents.blue.stackelberg import GAMMA
+from agents.blue.minimax import GAMMA
 from agents.red.agent import RedAI
 from agents.red.astar import plan, heuristic, step_cost, frontier_cost, node_risk, GOAL, UNKNOWN_WEAKNESS
 from engine import config as C
@@ -157,7 +157,7 @@ def trace_likelihood(pf, net, alerts, monitored, v):
 
 # ---------------------------------------------------------------- Blue: minimax
 def utility_parts(pl, st, p, r):
-    """Stackelberg.utility for a 'move' reply, term by term."""
+    """MinimaxPlanner.utility for a 'move' reply, term by term."""
     net, w = pl.net, pl.w
     d = pl.dist_to_db(st)
     dmax = max(x for x in d if x != math.inf) or 1.0
@@ -178,7 +178,7 @@ def utility_parts(pl, st, p, r):
 
 
 class MinimaxTracer:
-    """Mirror of Stackelberg.red_min / blue_max that keeps the tree."""
+    """Mirror of MinimaxPlanner.red_min / blue_max that keeps the tree."""
 
     def __init__(self, planner, prune=True):
         self.pl, self.prune = planner, prune
