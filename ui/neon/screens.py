@@ -11,7 +11,7 @@ from ui.neon import theme as T
 from ui.menu_game import MenuGame
 from ui import hidpi
 
-MENU_MAP = None
+MENU_MAP = pygame.Rect(720, 128, 790, 560)    # the map preview on the menu
 
 
 def make_background(app):
@@ -33,26 +33,22 @@ def make_background(app):
 
 
 def draw_menu(app, s):
-    b = app.menu_board
-    layer = hidpi.Surface((T.W, T.H))
-    layer.fill((0, 0, 0))
-    b.draw(layer, MenuGame(b.net), "full", app.t)
-    layer.set_alpha(70)
-    s.blit(layer, (0, 0))
-    veil = hidpi.Surface((T.W, T.H), pygame.SRCALPHA)
-    hidpi.rect(veil, (5, 9, 22, 170), (T.W // 2 - 420, 150, 840, 660), border_radius=30)
-    s.blit(veil, (0, 0))
-    fx.blit_glow(s, (T.W // 2 - 120, 270), 220, T.RED, 0.35)
-    fx.blit_glow(s, (T.W // 2 + 140, 270), 220, T.BLUE, 0.35)
-    fx.spaced(s, "AI LAB FINAL PROJECT  ·  KUET CSE", (T.W // 2, 190), 13, T.MUTED, "semibold", 4, anchor="midtop")
+    """Title and menu on the left, the chosen map on the right (as in the paper theme)."""
+    x0 = 110
+    fx.blit_glow(s, (x0 + 150, 250), 220, T.RED, 0.3)
+    fx.blit_glow(s, (x0 + 400, 250), 220, T.BLUE, 0.3)
+    fx.spaced(s, "AI LAB FINAL PROJECT  ·  KUET CSE", (x0 + 2, 140), 13, T.MUTED, "semibold", 4)
     glitch = int(3 * math.sin(app.t * 13)) if int(app.t * 2) % 7 == 0 else 0
-    fx.text(s, "ZERO DAY", (T.W // 2 + glitch + 3, 300), 118, T.scale(T.RED, 0.7), "black", anchor="center")
-    fx.text(s, "ZERO DAY", (T.W // 2 - glitch - 3, 300), 118, T.scale(T.BLUE, 0.7), "black", anchor="center")
-    fx.text(s, "ZERO DAY", (T.W // 2, 300), 118, T.WHITE, "black", anchor="center")
-    fx.text(s, "An intruder AI and a defender AI on a network neither can fully see.", (T.W // 2, 385), 19,
-            T.TEXT, "medium", anchor="center")
-    fx.text(s, "A* · Information-Set MCTS · opponent model   vs   particle filter · fuzzy logic · minimax + alpha-beta · GA",
-            (T.W // 2, 418), 14, T.MUTED, "medium", anchor="center")
+    fx.text(s, "ZERO DAY", (x0 + glitch + 3, 168), 118, T.scale(T.RED, 0.7), "black")
+    fx.text(s, "ZERO DAY", (x0 - glitch - 3, 168), 118, T.scale(T.BLUE, 0.7), "black")
+    fx.text(s, "ZERO DAY", (x0, 168), 118, T.WHITE, "black")
+    fx.text(s, "An intruder AI and a defender AI on a network", (x0, 330), 19, T.TEXT, "medium")
+    fx.text(s, "neither of them can fully see.", (x0, 356), 19, T.TEXT, "medium")
+    for i, (col, side, algos) in enumerate(((T.RED, "RED", "A* · Information-Set MCTS · opponent model"),
+                                            (T.BLUE, "BLUE", "particle filter · fuzzy logic · minimax + alpha-beta · GA"))):
+        y = 398 + i * 24
+        fx.spaced(s, side, (x0, y + 2), 11, col, "bold", 3)
+        fx.text(s, algos, (x0 + 52, y), 14, T.MUTED, "medium")
     for i, ((label, _), r) in enumerate(zip(app._menu_items(), menu_rects(app))):
         sel = i == app.menu_sel
         key = app._menu_items()[i][1]
@@ -62,14 +58,26 @@ def draw_menu(app, s):
             hidpi.rect(s, T.scale(col, 0.22), r, border_radius=25)
         hidpi.rect(s, col if sel else T.PANEL_EDGE, r, 2 if sel else 1, border_radius=25)
         fx.spaced(s, label, r.center, 15, T.WHITE if sel else col, "bold", 4, anchor="center")
-    fx.text(s, f"Map seed  ◀  {app.seed}  ▶      R: random map      T: theme", (T.W // 2, 752), 14, T.MUTED, "medium",
-            mono=True, anchor="center")
-    fx.text(s, "Muttakin Rahman Shoscho (2207061)   ·   Yasar Wajih (2207064)", (T.W // 2, 862), 14, T.DIM,
-            "medium", anchor="center")
+
+    # right: the chosen map in a panel, with its seed underneath
+    b = app.menu_board
+    fx.rounded_panel(s, b.rect.inflate(24, 24), radius=18, alpha=200)
+    b.draw(s, MenuGame(b.net), "full", app.t)
+    pr = b.rect.inflate(24, 24)
+    fx.spaced(s, f"MAP {app.seed}", (pr.x + 4, pr.bottom + 16), 15, T.WHITE, "bold", 3)
+    fx.text(s, "◀ ▶  change map      R  random map", (pr.right - 4, pr.bottom + 16), 14, T.MUTED, "medium",
+            mono=True, anchor="topright")
+    fx.text(s, "Red starts at GW and is after DB. Blue sees every node but never Red.", (pr.x + 4, pr.bottom + 44),
+            14, T.DIM, "medium")
+
+    fx.text(s, "Muttakin Rahman Shoscho (2207061)   ·   Yasar Wajih (2207064)", (x0, 862), 14, T.DIM, "medium",
+            anchor="midleft")
+    fx.text(s, "Up / Down choose   Enter start   T theme   Esc quit", (T.W - 90, 862), 13, T.DIM, "medium",
+            mono=True, anchor="midright")
 
 
 def menu_rects(app):
-    return [pygame.Rect(T.W // 2 - 170, 446 + i * 48, 340, 40) for i in range(len(app._menu_items()))]
+    return [pygame.Rect(110, 470 + i * 48, 460, 40) for i in range(len(app._menu_items()))]
 
 
 def draw_pending(app, s):
