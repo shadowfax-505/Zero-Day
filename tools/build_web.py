@@ -24,7 +24,7 @@ KEEP_FILES = ["main.py", "tuning/best_weights.json", "tuning/red_weights.json", 
 def copy():
     if os.path.exists(APP):
         shutil.rmtree(APP)
-    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "LICENSE-*.txt")
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "LICENSE-*.txt", "icon")   # app icons are for the desktop builds
     for d in KEEP_DIRS:
         shutil.copytree(os.path.join(ROOT, d), os.path.join(APP, d), ignore=ignore)
     for f in KEEP_FILES:

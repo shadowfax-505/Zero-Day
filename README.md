@@ -17,7 +17,7 @@ techniques, all written from scratch.
 **Team:** Muttakin Rahman Shoscho (2207061) · Yasar Wajih (2207064)
 **Course:** Artificial Intelligence Laboratory, Dept. of CSE, KUET
 
-**Play it in the browser:** <https://shadowfax-505.github.io/Zero-Day/> (works on phones too)
+**Play it:** [download it for Windows, macOS or Linux](#download-and-play) or [play in the browser](https://shadowfax-505.github.io/Zero-Day/) (works on phones too)
 
 ### What's in it
 
@@ -46,6 +46,38 @@ flowchart LR
 
 ---
 
+## Download and play
+
+No Python needed. Download the file for your computer and open it.
+
+| System | Download |
+| --- | --- |
+| **Windows** 10 and 11 | [Installer (.exe)](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-Windows-Setup.exe) · [portable zip](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-Windows-Portable.zip) |
+| **macOS** with Apple chip (M1 to M4) | [Disk image (.dmg)](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-macOS-AppleSilicon.dmg) |
+| **macOS** with Intel chip | [Disk image (.dmg)](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-macOS-Intel.dmg) |
+| **Linux** x86_64 | [AppImage](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-Linux-x86_64.AppImage) · [tar.gz](https://github.com/shadowfax-505/Zero-Day/releases/latest/download/ZeroDay-Linux-x86_64.tar.gz) |
+| **Phone, tablet, Chromebook** or anything else | [Play in the browser](https://shadowfax-505.github.io/Zero-Day/) (nothing to install) |
+
+All versions are on the [Releases](../../releases) page.
+
+<details>
+<summary>The first time you open it</summary>
+
+The apps are not signed with a paid developer certificate, so the system asks once before it opens them.
+
+- **Windows:** if SmartScreen says "Windows protected your PC", click **More info** then **Run anyway**.
+  The installer puts Zero Day in the Start menu and needs no admin rights.
+- **macOS:** open the .dmg and drag Zero Day to Applications. If macOS says the app "cannot be opened",
+  open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+  Not sure which Mac you have? Apple menu → **About This Mac** shows "Chip: Apple M..." or "Processor: Intel".
+- **Linux:** `chmod +x ZeroDay-Linux-x86_64.AppImage` then run it. If it does not start, install FUSE
+  (`sudo apt install libfuse2`, or `libfuse2t64` on Ubuntu 24.04 and newer) or run it with
+  `--appimage-extract-and-run`.
+
+</details>
+
+---
+
 ## Quick start
 
 ```bash
@@ -57,9 +89,8 @@ python main.py
 Python 3.10 or newer. The game uses `pygame-ce` (regular `pygame` 2.5+ also works) and `numpy`
 (`websockets` only for online play through the relay server).
 
-No Python? Play it [in the browser](https://shadowfax-505.github.io/Zero-Day/). Desktop apps for
-Windows, macOS and Linux get attached to the [Releases](../../releases) page whenever a version tag is
-pushed. [DEPLOY.md](DEPLOY.md) explains how both are published.
+This is only needed to work on the code. To just play, use the [downloads](#download-and-play) above.
+[DEPLOY.md](DEPLOY.md) explains how the apps and the browser version are published.
 
 | Command | What it does |
 | --- | --- |
@@ -505,7 +536,7 @@ tuning/          ga.py (both sides), learn_from_matches.py, tuned weights, learn
 ui/              Pygame app: menu, online lobby, network renderer, panels, effects, human input
 net/             online play: TCP link, LAN discovery, relay (WebSocket) link, lockstep match protocol
 server/          relay server for online play through the internet and the browser (Render / Fly.io)
-tools/           browser build (pygbag), desktop build (PyInstaller), browser smoke test
+tools/           browser build (pygbag), desktop build and installers (PyInstaller, Inno Setup, AppImage), smoke tests
 experiments/     headless batch runner, charts, results
 tests/           engine, online lockstep and resync, relay, phone layout, sharp drawing, cut-off and AI-part checks
 .github/         workflows: browser build + GitHub Pages, desktop builds on v* tags

@@ -4,7 +4,7 @@
 
 - Browser game: <https://shadowfax-505.github.io/Zero-Day/> (GitHub Pages, rebuilt on every push to `main`)
 - Relay server: <https://zero-day-relay.onrender.com> (Render free plan, deploys from `main`)
-- Desktop apps: built when a `v*` tag is pushed (see section 3). No release has been tagged yet.
+- Desktop apps: installers for Windows, macOS and Linux, built when a `v*` tag is pushed (see section 3).
 
 The rest of this file is how we set those up, in case you want to run your own copy.
 
@@ -14,7 +14,7 @@ There are three pieces, and each one is free:
 |---|---|---|
 | **Relay server** | `server/relay.py`, a tiny WebSocket server that pairs two players by a four-letter code and passes their moves between them | Render (or Fly.io) |
 | **Web version** | The same Pygame game compiled for the browser with pygbag | GitHub Pages and/or itch.io |
-| **Desktop apps** | Double-clickable builds for Windows, macOS and Linux (PyInstaller) | GitHub Releases |
+| **Desktop apps** | Windows installer, macOS .dmg (Apple Silicon and Intel), Linux AppImage (PyInstaller) | GitHub Releases |
 
 The relay never runs the game. Both players' copies run the same match in lockstep, exactly as in
 direct LAN play, and only moves and chat go through the server. Desktop copies can still play
@@ -72,18 +72,47 @@ Settings in the browser last until the tab is closed.
 
 ## 3. Desktop apps on GitHub Releases
 
-`.github/workflows/desktop.yml` builds Windows, macOS and Linux apps with PyInstaller.
+`.github/workflows/desktop.yml` builds the apps with PyInstaller and packages them so nobody needs
+Python to play:
 
-* **Make a release:** `git tag v1.0 && git push origin v1.0`. The apps are attached to a GitHub
-  Release called v1.0 a few minutes later.
-* **Just try a build:** **Actions → Desktop builds → Run workflow**, then download the zips from
-  the run page.
+| File | For |
+| --- | --- |
+| `ZeroDay-Windows-Setup.exe` | Windows installer (Start menu and desktop shortcut, per-user, no admin) |
+| `ZeroDay-Windows-Portable.zip` | Windows without installing |
+| `ZeroDay-macOS-AppleSilicon.dmg` | Macs with an Apple chip |
+| `ZeroDay-macOS-Intel.dmg` | Intel Macs |
+| `ZeroDay-Linux-x86_64.AppImage` | Linux, one file (built on Ubuntu 22.04 so it runs on older distributions too) |
+| `ZeroDay-Linux-x86_64.tar.gz` | Linux, plain folder |
 
-The apps are not code-signed. On Windows click **More info → Run anyway**; on macOS right-click
-the app, choose **Open**, then **Open** again.
+Before a build is uploaded, the workflow starts it with no window and checks that it plays a few
+seconds of an AI vs AI match (`tools/smoke_desktop.py`). The Windows installer and the macOS disk
+image are tested the same way after installing from them.
 
-To build one on your own computer: `pip install pyinstaller` then `python tools/build_desktop.py`
-(the result is in `dist/`).
+* **Make a release:** `git tag v1.1 && git push origin v1.1`. All six files are attached to a GitHub
+  Release called v1.1 about 10 minutes later, with the download table from
+  `tools/installer/release-notes.md` as its description.
+* **Add the files to a release that already exists:** **Actions → Desktop builds → Run workflow** and
+  type its tag (for example `v1.0`) in the box.
+* **Just try a build:** **Actions → Desktop builds → Run workflow** with the box left empty, then
+  download the files from the run page.
+
+The file names stay the same in every version, so the links in the README
+(`releases/latest/download/<file>`) always point at the newest release.
+
+The apps are not code-signed. On Windows click **More info → Run anyway**. On macOS open
+**System Settings → Privacy & Security** and click **Open Anyway** (on macOS 14 or older, right-click
+the app and choose **Open**). Removing these warnings needs a paid Apple Developer account and a
+Windows code-signing certificate.
+
+To build on your own computer:
+
+```bash
+pip install pyinstaller pillow
+python tools/build_desktop.py        # the app, in dist/
+python tools/package_desktop.py      # the installer, .dmg or AppImage, in release/
+```
+
+The Windows installer needs [Inno Setup](https://jrsoftware.org/isinfo.php) installed.
 
 ## Playing online
 

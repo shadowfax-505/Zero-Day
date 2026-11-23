@@ -1,12 +1,31 @@
-# Builds double-clickable Zero Day apps for Windows, macOS and Linux with PyInstaller.
-# Push a tag like v1.0 (git tag v1.0 && git push origin v1.0) to attach them to a GitHub Release,
-# or run it by hand from the Actions tab to get them as downloadable build artifacts.
+# Builds the downloadable Zero Day apps with PyInstaller and packages them for each system:
+#   Windows  installer (.exe) and portable zip
+#   macOS    disk image (.dmg) for Apple Silicon and for Intel Macs
+#   Linux    AppImage and tar.gz
+# Every build is started headless and has to play a few seconds of an AI vs AI match before it counts.
+#
+# Push a tag like v1.1 (git tag v1.1 && git push origin v1.1) to publish a GitHub Release with all of them.
+# Run it by hand from the Actions tab to get them as build artifacts, or give a tag that already
+# has a release (for example v1.0) to add the new files to that release.
 name: Desktop builds
 
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    paths:
+      - ".github/workflows/desktop.yml"
+      - "tools/build_desktop.py"
+      - "tools/package_desktop.py"
+      - "tools/smoke_desktop.py"
+      - "tools/installer/**"
+      - "assets/icon/**"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Also add the files to the release with this tag (leave empty to only build)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -18,11 +37,18 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            name: ZeroDay-Windows
+            label: Windows
+            smoke: dist/Zero Day/Zero Day.exe
           - os: macos-latest
-            name: ZeroDay-macOS
-          - os: ubuntu-latest
-            name: ZeroDay-Linux
+            label: macOS-AppleSilicon
+            smoke: dist/Zero Day.app/Contents/MacOS/Zero Day
+          - os: macos-15-intel
+            label: macOS-Intel
+            smoke: dist/Zero Day.app/Contents/MacOS/Zero Day
+          # the oldest supported Ubuntu, so the AppImage also runs on older distributions
+          - os: ubuntu-22.04
+            label: Linux
+            smoke: release/ZeroDay-Linux-x86_64.AppImage
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,26 +56,56 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install pygame-ce numpy websockets pyinstaller
+        run: pip install pygame-ce numpy websockets pyinstaller pillow
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        run: if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Install AppImage tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 file
       - name: Build
         run: python tools/build_desktop.py
       - name: Package
-        shell: bash
+        run: python tools/package_desktop.py
+      - name: Start the app and play a few seconds
+        run: python tools/smoke_desktop.py "${{ matrix.smoke }}"
+      - name: Install with the installer and play from the installed copy
+        if: runner.os == 'Windows'
         run: |
-          cd dist
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "../${{ matrix.name }}.zip" "Zero Day"
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            ditto -c -k --keepParent "Zero Day.app" "../${{ matrix.name }}.zip"
-          else
-            tar czf "../${{ matrix.name }}.tar.gz" "Zero Day"
-          fi
+          Start-Process -Wait -FilePath release\ZeroDay-Windows-Setup.exe -ArgumentList "/VERYSILENT","/CURRENTUSER","/SUPPRESSMSGBOXES","/NORESTART"
+          python tools/smoke_desktop.py "$env:LOCALAPPDATA\Programs\Zero Day\Zero Day.exe"
+      - name: Open the disk image and play from it
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil attach -nobrowse -mountpoint /tmp/zero-day-dmg release/*.dmg
+          python tools/smoke_desktop.py "/tmp/zero-day-dmg/Zero Day.app/Contents/MacOS/Zero Day"
+          hdiutil detach /tmp/zero-day-dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}
-          path: ${{ matrix.name }}.*
-      - name: Attach to the release
+          name: ZeroDay-${{ matrix.label }}
+          path: release/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - run: ls -l release
+      - name: Publish the release (new tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.name }}.*
+          name: Zero Day ${{ github.ref_name }}
+          body_path: tools/installer/release-notes.md
+          files: release/*
+      - name: Add the files to an existing release
+        if: inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          files: release/*
