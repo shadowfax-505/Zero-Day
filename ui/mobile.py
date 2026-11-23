@@ -23,6 +23,7 @@ from ui import device
 from ui import overlays as O
 from ui.menu_game import MenuGame
 from ui.online import _Ink
+from ui import hidpi
 
 TOOLS = ["monitor", "patch", "decoy", "isolate", "restore"]
 SPEEDS = [0.5, 1, 2, 4]
@@ -74,7 +75,7 @@ def make_board(app, net, mode):
 def make_background(app):
     T = app.sk.T
     W, H = app.size
-    bg = pygame.Surface((W, H))
+    bg = hidpi.Surface((W, H))
     bg.fill(T.BG)
     if T.NAME == "paper":                       # the same faint print grain as the computer layout
         rng = random.Random(7)
@@ -157,8 +158,8 @@ def draw_button(app, s, b):
     r = b.rect
     accent = b.accent or T.STRONG
     filled = b.on or b.hot
-    pygame.draw.rect(s, accent if filled else T.PANEL, r)
-    pygame.draw.rect(s, accent if (filled or b.enabled) else T.PANEL_EDGE, r, 2 if filled else 1)
+    hidpi.rect(s, accent if filled else T.PANEL, r)
+    hidpi.rect(s, accent if (filled or b.enabled) else T.PANEL_EDGE, r, 2 if filled else 1)
     col = T.BG if filled else (T.TEXT if b.enabled else T.DIM)
     size = 14 if r.w >= 84 else 12
     if b.sub:
@@ -215,8 +216,8 @@ def draw_match(app, s):
     _draw_board(app, s)
     _draw_top(app, s, R["top"])
     _draw_pane(app, s, R)
-    pygame.draw.rect(s, T.BG, R["bar"])
-    pygame.draw.line(s, T.STRONG, R["bar"].topleft, R["bar"].topright, 2)
+    hidpi.rect(s, T.BG, R["bar"])
+    hidpi.line(s, T.STRONG, R["bar"].topleft, R["bar"].topright, 2)
     app._bar = layout_bar(app, bar_buttons(app), R["bar"])
     for b in app._bar:
         draw_button(app, s, b)
@@ -228,7 +229,7 @@ def draw_match(app, s):
 def _draw_board(app, s):
     m, g = app.match, app.match.game
     hl, hover = (), None
-    mouse = pygame.mouse.get_pos()
+    mouse = hidpi.mouse_pos()
     monitored = set(g.monitored)
     if app.phase == "reveal" and app.pending_blue:
         monitored |= {t for k, t in app.pending_blue if k == "monitor"}
@@ -259,16 +260,16 @@ def _draw_board(app, s):
 def _draw_top(app, s, r):
     T, ink = app.sk.T, _Ink(app.sk)
     g, net = app.match.game, app.match.net
-    pygame.draw.rect(s, T.BG, r)
-    pygame.draw.line(s, T.STRONG, (0, r.bottom - 1), (r.right, r.bottom - 1), 2)
-    pygame.draw.rect(s, T.RED, (10, r.centery - 9, 6, 18))
-    pygame.draw.rect(s, T.BLUE, (18, r.centery - 9, 6, 18))
+    hidpi.rect(s, T.BG, r)
+    hidpi.line(s, T.STRONG, (0, r.bottom - 1), (r.right, r.bottom - 1), 2)
+    hidpi.rect(s, T.RED, (10, r.centery - 9, 6, 18))
+    hidpi.rect(s, T.BLUE, (18, r.centery - 9, 6, 18))
     r_now = min(g.round, C.MAX_ROUNDS)
     x = ink.spaced(s, "ROUND", (34, r.centery + 1), 13, T.MUTED, "semibold", 2, anchor="midleft").right
     x = ink.text(s, f"{r_now:02d}", (x + 8, r.centery), 22, T.STRONG, "semibold", mono=True, anchor="midleft").right
     ink.text(s, f"/{C.MAX_ROUNDS}", (x + 2, r.centery + 3), 12, T.DIM, "medium", mono=True, anchor="midleft")
     # rounds played, as a thin rule along the bottom edge
-    pygame.draw.line(s, T.RED if g.winner == "red" else T.BLUE, (0, r.bottom - 2),
+    hidpi.line(s, T.RED if g.winner == "red" else T.BLUE, (0, r.bottom - 2),
                      (int(r.w * r_now / C.MAX_ROUNDS), r.bottom - 2), 3)
     o = app.online
     if o:
@@ -300,20 +301,20 @@ def _draw_pane(app, s, R):
     body = R["body"]
     for (k, label, col), (_, r) in zip(_tabs(app), tab_rects(app, R)):
         on = k == app.pane_tab
-        pygame.draw.rect(s, col if on else T.PANEL, r)
-        pygame.draw.rect(s, col, r, 1)
+        hidpi.rect(s, col if on else T.PANEL, r)
+        hidpi.rect(s, col, r, 1)
         ink.spaced(s, label, (r.centerx, r.centery + 1), 14, T.BG if on else col, "bold", 2, anchor="center")
     content, h = _pane_content(app, body.w, body.h)
     app.pane_max = max(0, h - body.h)
     app.pane_scroll = max(0, min(app.pane_scroll, app.pane_max))
-    pygame.draw.rect(s, T.BG, body)
+    hidpi.rect(s, T.BG, body)
     s.blit(content, body.topleft, pygame.Rect(0, app.pane_scroll, body.w, body.h))
-    pygame.draw.rect(s, T.PANEL_EDGE, body, 1)
+    hidpi.rect(s, T.PANEL_EDGE, body, 1)
     if app.pane_max > 0:                                    # scroll position
         track = body.h - 8
         th = max(24, int(track * body.h / h))
         ty = body.y + 4 + int((track - th) * app.pane_scroll / app.pane_max)
-        pygame.draw.rect(s, T.DIM, (body.right - 5, ty, 3, th))
+        hidpi.rect(s, T.DIM, (body.right - 5, ty, 3, th))
 
 
 def _pane_content(app, w, vis_h):
@@ -325,7 +326,7 @@ def _pane_content(app, w, vis_h):
         return _log_surface(app, w, vis_h)
     hidden = (tab == "red" and app.view == "blue") or (tab == "blue" and app.view == "red")
     h = vis_h if hidden else max(vis_h, PANEL_H)
-    surf = pygame.Surface((w, h))
+    surf = hidpi.Surface((w, h))
     surf.fill(T.BG)
     r = pygame.Rect(0, 0, w, h)
     if tab == "red":
@@ -345,7 +346,7 @@ def _log_surface(app, w, vis_h):
         for i, line in enumerate(O.wrap(f, text.strip(), w - 66)):
             rows.append((rnd if i == 0 else None, col, line, text.startswith("   ")))
     h = max(vis_h, 40 + 19 * len(rows))
-    surf = pygame.Surface((w, h))
+    surf = hidpi.Surface((w, h))
     surf.fill(T.BG)
     ink.spaced(surf, "MOVE LOG", (14, 12), 13, T.MUTED, "semibold", 2)
     ink.text(surf, "newest first", (w - 14, 13), 11, T.DIM, "regular", mono=True, anchor="topright")
@@ -366,7 +367,7 @@ def draw_result(app, s):
     g, m = app.match.game, app.match
     R = match_rects(app)
     k = min(1.0, app.result_t / 0.4)
-    veil = pygame.Surface(app.size, pygame.SRCALPHA)
+    veil = hidpi.Surface(app.size, pygame.SRCALPHA)
     veil.fill((*T.BG, int(190 * k)))
     s.blit(veil, (0, 0), pygame.Rect(0, 0, app.size[0], R["bar"].y))
     col = T.RED if g.winner == "red" else T.BLUE
@@ -378,10 +379,10 @@ def draw_result(app, s):
     ch = 210 + 20 * len(reason) + (26 if o else 0)
     card = pygame.Rect(0, 0, cw, ch)
     card.center = (area.centerx, area.centery + int(12 * (1 - k)))
-    pygame.draw.rect(s, T.PAPER_3, card.move(6, 6))
-    pygame.draw.rect(s, T.PANEL, card)
-    pygame.draw.rect(s, T.STRONG, card, 2)
-    pygame.draw.rect(s, col, (card.x, card.y, card.w, 10))
+    hidpi.rect(s, T.PAPER_3, card.move(6, 6))
+    hidpi.rect(s, T.PANEL, card)
+    hidpi.rect(s, T.STRONG, card, 2)
+    hidpi.rect(s, col, (card.x, card.y, card.w, 10))
     x, y = card.x + 20, card.y + 24
     ink.spaced(s, f"ROUND {g.round}  /  MAP {m.net.seed}", (x, y), 13, T.MUTED, "semibold", 2)
     y += 18
@@ -394,7 +395,7 @@ def draw_result(app, s):
         ink.text(s, line, (x, y), 15, T.TEXT, "regular")
         y += 20
     y += 8
-    pygame.draw.line(s, T.STRONG, (x, y), (card.right - 20, y))
+    hidpi.line(s, T.STRONG, (x, y), (card.right - 20, y))
     stats = [("Red nodes held", str(len(g.red_held))),
              ("Blue found Red", f"round {m.located_round}" if m.located_round else "never"),
              ("Alerts raised", str(sum(len(r.alerts) for r in g.history)))]
@@ -453,10 +454,10 @@ def draw_menu(app, s):
     W, H = app.size
     geo = menu_geometry(app)
     x, y, size = geo["title"]
-    pygame.draw.rect(s, T.RED, (x, y - 18, 10, 22))
-    pygame.draw.rect(s, T.BLUE, (x + 12, y - 18, 10, 22))
+    hidpi.rect(s, T.RED, (x, y - 18, 10, 22))
+    hidpi.rect(s, T.BLUE, (x + 12, y - 18, 10, 22))
     ink.spaced(s, "KUET CSE  /  AI LAB", (x + 32, y - 7), 13, T.MUTED, "semibold", 2, anchor="midleft")
-    scratch = pygame.Surface((1, 1))
+    scratch = hidpi.Surface((1, 1))
     avail = (W - 2 * x) if app.layout == "portrait" else int(W * 0.46) - x
     while size > 40 and ink.text(scratch, "ZERO DAY", (0, 0), size, T.STRONG, "bold", display=True).w > avail:
         size -= 6                                        # the dark theme's face is wider
@@ -474,8 +475,8 @@ def draw_menu(app, s):
         b.draw(s, MenuGame(b.net), "full", app.t)
     for key in ("prev", "rand", "next"):
         r = geo[key]
-        pygame.draw.rect(s, T.PANEL, r)
-        pygame.draw.rect(s, T.PANEL_EDGE, r, 1)
+        hidpi.rect(s, T.PANEL, r)
+        hidpi.rect(s, T.PANEL_EDGE, r, 1)
     ink.text(s, "<", geo["prev"].center, 20, T.STRONG, "bold", mono=True, anchor="center")
     ink.text(s, ">", geo["next"].center, 20, T.STRONG, "bold", mono=True, anchor="center")
     ink.text(s, f"MAP {app.seed}", (geo["rand"].centerx, geo["rand"].centery - 7), 15, T.STRONG, "bold",
@@ -486,8 +487,8 @@ def draw_menu(app, s):
     for i, ((label, key), r) in enumerate(zip(app._menu_items(), geo["items"])):
         sel = i == app.menu_sel
         col = {"red": T.RED, "blue": T.BLUE}.get(key, T.STRONG)
-        pygame.draw.rect(s, col if sel else T.PANEL, r)
-        pygame.draw.rect(s, col, r, 2 if sel else 1)
+        hidpi.rect(s, col if sel else T.PANEL, r)
+        hidpi.rect(s, col, r, 2 if sel else 1)
         ink.text(s, f"{i + 1:02d}", (r.x + 14, r.centery), 13, T.BG if sel else T.DIM, "medium", mono=True,
                  anchor="midleft")
         ink.spaced(s, label, (r.x + 50, r.centery + 1), 20, T.BG if sel else col, "bold", 2, anchor="midleft")
@@ -524,7 +525,7 @@ def draw_lobby(app, s):
     d.blit(app.design_bg, (0, 0))
     app.lobby.draw(d, app.t, app.sk)
     for src, dst in lobby_places(app):
-        s.blit(pygame.transform.smoothscale(d.subsurface(src), dst.size), dst)
+        s.blit(hidpi.smoothscale(d.subsurface(src), dst.size), dst)
 
 
 def lobby_event(app, ev):
@@ -579,7 +580,7 @@ def handle(app, ev):
     if ev.type == pygame.MOUSEBUTTONUP and getattr(app, "_drag", None):
         app._drag = None
         return True
-    if ev.type == pygame.MOUSEWHEEL and R["pane"].collidepoint(pygame.mouse.get_pos()):
+    if ev.type == pygame.MOUSEWHEEL and R["pane"].collidepoint(hidpi.mouse_pos()):
         app.pane_scroll = max(0, min(getattr(app, "pane_max", 0), app.pane_scroll - ev.y * 40))
         return True
     return False

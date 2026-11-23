@@ -22,6 +22,7 @@ from ui import device
 from net.relay import WEB, RelayPeer, default_relay_url, normalise_url, relay_override
 from net.session import Session
 from ui import theme as T     # rebound to the active skin's theme in Lobby.draw()
+from ui import hidpi
 
 fx = None                     # rebound to an _Ink for the active skin in Lobby.draw()
 
@@ -43,7 +44,7 @@ class _Ink:
 
     @staticmethod
     def hrule(surf, x0, x1, y, color=None, width=1):
-        pygame.draw.line(surf, color or T.RULE, (x0, y), (x1, y), width)
+        hidpi.line(surf, color or T.RULE, (x0, y), (x1, y), width)
 
 
 PREFS = os.path.join(os.path.expanduser("~"), ".zero-day-online.json")
@@ -471,8 +472,8 @@ class Lobby:
         global T, fx
         T, fx = sk.T, _Ink(sk)
         x0 = self.X0
-        pygame.draw.rect(s, T.RED, (x0, 128, 14, 34))
-        pygame.draw.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
+        hidpi.rect(s, T.RED, (x0, 128, 14, 34))
+        hidpi.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
         fx.spaced(s, "ZERO DAY  /  ONLINE", (x0 + 46, 145), 17, T.INK_2, "semibold", 2, anchor="midleft")
         fx.text(s, "PLAY ONLINE", (x0 - 4, 166), 96, T.INK, "bold", display=True)
         if self.state == "setup":
@@ -480,8 +481,8 @@ class Lobby:
         else:
             self._draw_waiting(s, t)
             r = self.CANCEL
-            pygame.draw.rect(s, T.PAPER, r)
-            pygame.draw.rect(s, T.INK, r, 2)
+            hidpi.rect(s, T.PAPER, r)
+            hidpi.rect(s, T.INK, r, 2)
             fx.spaced(s, "CANCEL", r.center, 20, T.INK, "bold", 2, anchor="center")
         fx.hrule(s, x0, T.W - 60, T.H - 52)
         hint = ("Up / Down: choose    Left / Right: change    Type to edit    Enter: go    Esc: back"
@@ -505,8 +506,8 @@ class Lobby:
                 continue
             label, value, col = self._row_text(row, sel, caret)
             if sel:
-                pygame.draw.rect(s, T.PAPER_3, r)
-                pygame.draw.rect(s, col, (r.x, r.y, 5, r.h))
+                hidpi.rect(s, T.PAPER_3, r)
+                hidpi.rect(s, col, (r.x, r.y, 5, r.h))
             fx.spaced(s, label, (r.x + 18, r.centery + 1), 22, col, "bold", 2, anchor="midleft")
             if value:
                 fx.text(s, value, (r.right - 16, r.centery), 17, T.INK if row in ("name", "ip") else col,
@@ -555,9 +556,9 @@ class Lobby:
                 where = f"{ip}:{port}"
             sel = i == self.sel
             if sel:
-                pygame.draw.rect(s, T.PAPER_3, r)
+                hidpi.rect(s, T.PAPER_3, r)
             col = T.BLUE if side == "red" else T.RED   # you would play the other side
-            pygame.draw.rect(s, col, (r.x, r.y, 5, r.h))
+            hidpi.rect(s, col, (r.x, r.y, 5, r.h))
             fx.text(s, name, (r.x + 18, r.centery), 20, T.INK, "semibold", anchor="midleft")
             you = "BLUE" if side == "red" else "RED"
             fx.text(s, f"{where}   you play {you}", (r.right - 16, r.centery), 14, T.INK_2, "regular",
@@ -616,8 +617,8 @@ class Lobby:
             fx.text(s, "and type it in JOIN BY CODE (or click your game in their list).", (x0, y + 106), 18,
                     T.INK_2, "regular")
             box = pygame.Rect(x0, y + 150, 360, 110)
-            pygame.draw.rect(s, T.PAPER, box)
-            pygame.draw.rect(s, T.INK, box, 2)
+            hidpi.rect(s, T.PAPER, box)
+            hidpi.rect(s, T.INK, box, 2)
             fx.text(s, " ".join(code), (box.centerx, box.centery), 64, T.INK, "semibold", mono=True,
                     anchor="center")
             fx.spaced(s, f"YOU PLAY {'RED' if self.side == 'red' else 'BLUE'}"
@@ -631,8 +632,8 @@ class Lobby:
             fx.text(s, "on the same network. Otherwise they pick JOIN BY IP and type this address:",
                     (x0, y + 106), 18, T.INK_2, "regular")
             box = pygame.Rect(x0, y + 150, 620, 90)
-            pygame.draw.rect(s, T.PAPER, box)
-            pygame.draw.rect(s, T.INK, box, 2)
+            hidpi.rect(s, T.PAPER, box)
+            hidpi.rect(s, T.INK, box, 2)
             fx.text(s, f"{self.my_ip}:{self.port}", (box.x + 24, box.centery), 46, T.INK, "semibold", mono=True,
                     anchor="midleft")
             fx.spaced(s, f"YOU PLAY {'RED' if self.side == 'red' else 'BLUE'}"

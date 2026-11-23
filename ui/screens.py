@@ -9,13 +9,14 @@ from agents.human import HumanRed, HumanBlue
 from ui import fx
 from ui import theme as T
 from ui.menu_game import MenuGame
+from ui import hidpi
 
 MENU_MAP = pygame.Rect(720, 128, 790, 560)
 
 
 def make_background(app):
     """Plain paper with a faint print grain."""
-    bg = pygame.Surface((T.W, T.H))
+    bg = hidpi.Surface((T.W, T.H))
     bg.fill(T.PAPER)
     rng = random.Random(7)
     for _ in range(9000):
@@ -27,8 +28,8 @@ def make_background(app):
 def draw_menu(app, s):
     x0 = 110
     # left column: title block
-    pygame.draw.rect(s, T.RED, (x0, 128, 14, 34))
-    pygame.draw.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
+    hidpi.rect(s, T.RED, (x0, 128, 14, 34))
+    hidpi.rect(s, T.BLUE, (x0 + 17, 128, 14, 34))
     fx.spaced(s, "KUET CSE  /  AI LAB FINAL PROJECT", (x0 + 46, 145), 17, T.INK_2, "semibold", 2,
               anchor="midleft")
     fx.text(s, "ZERO DAY", (x0 - 6, 170), 168, T.INK, "bold", display=True)
@@ -39,7 +40,7 @@ def draw_menu(app, s):
     for col, side, algos in ((T.RED, "RED  /  INTRUDER", "A* route, Information-Set MCTS, opponent model"),
                              (T.BLUE, "BLUE  /  DEFENDER",
                               "particle filter, fuzzy logic, minimax + alpha-beta, GA tuning")):
-        pygame.draw.rect(s, col, (x0, y + 3, 4, 34))
+        hidpi.rect(s, col, (x0, y + 3, 4, 34))
         fx.spaced(s, side, (x0 + 16, y), 15, col, "bold", 2)
         fx.text(s, algos, (x0 + 16, y + 20), 14, T.INK_2, "regular")
         y += 50
@@ -51,7 +52,7 @@ def draw_menu(app, s):
         sel = i == app.menu_sel
         col = {"ai": T.INK, "red": T.RED, "blue": T.BLUE}.get(app._menu_items()[i][1], T.INK_2)
         if sel:
-            pygame.draw.rect(s, col, r)
+            hidpi.rect(s, col, r)
         fx.text(s, f"{i + 1:02d}", (r.x + 14, r.centery), 15, T.PAPER if sel else T.INK_3, "medium", mono=True,
                 anchor="midleft")
         fx.spaced(s, label, (r.x + 56, r.centery + 1), 24, T.PAPER if sel else col, "bold", 2, anchor="midleft")
@@ -119,7 +120,7 @@ def draw_thinking(app, s):
 def draw_result(app, s):
     g, m = app.match.game, app.match
     k = min(1.0, app.result_t / 0.4)
-    veil = pygame.Surface((T.W, T.H), pygame.SRCALPHA)
+    veil = hidpi.Surface((T.W, T.H), pygame.SRCALPHA)
     veil.fill((*T.PAPER, int(200 * k)))
     s.blit(veil, (0, 0))
     col = T.RED if g.winner == "red" else T.BLUE
@@ -127,10 +128,10 @@ def draw_result(app, s):
     card = pygame.Rect(0, 0, 820, 400)
     card.center = (T.W // 2, T.H // 2 - 30 + int(16 * (1 - k)))
     shadow = card.move(8, 8)
-    pygame.draw.rect(s, T.PAPER_3, shadow)
-    pygame.draw.rect(s, T.PAPER, card)
-    pygame.draw.rect(s, T.INK, card, 2)
-    pygame.draw.rect(s, col, (card.x, card.y, card.w, 14))
+    hidpi.rect(s, T.PAPER_3, shadow)
+    hidpi.rect(s, T.PAPER, card)
+    hidpi.rect(s, T.INK, card, 2)
+    hidpi.rect(s, col, (card.x, card.y, card.w, 14))
     x = card.x + 48
     fx.spaced(s, f"ROUND {g.round}  /  MAP {m.net.seed}", (x, card.y + 40), 16, T.INK_2, "semibold", 2)
     fx.text(s, title, (x - 4, card.y + 58), 112, col, "bold", display=True)
@@ -145,7 +146,7 @@ def draw_result(app, s):
     for i, (lab, val) in enumerate(stats):
         cx = x + i * cw
         if i:
-            pygame.draw.line(s, T.RULE, (cx - 12, y + 12), (cx - 12, y + 70))
+            hidpi.line(s, T.RULE, (cx - 12, y + 12), (cx - 12, y + 70))
         fx.text(s, lab, (cx, y + 14), 12, T.INK_2, "regular")
         fx.text(s, val, (cx, y + 34), 28, T.INK, "medium", mono=True)
     fx.hrule(s, x, card.right - 48, y + 84)
