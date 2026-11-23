@@ -129,7 +129,8 @@ maximised or made fullscreen (`F11`) at any time. The game is laid out at 1600 x
 window's real pixel size (`ui/hidpi.py`), so text and lines stay sharp on Retina and 4K screens as well as
 on 1080p and small laptop screens. If the shape doesn't match, the rest of the window is filled with the
 background colour. `ZERO_DAY_HIDPI=0 python main.py` goes back to a plain window that is stretched to fit.
-The browser version is unchanged.
+The browser version makes its canvas as many pixels as the page shows it at (up to twice the layout size), so it
+is sharp on phones and Retina laptops too.
 
 ### Themes and settings
 

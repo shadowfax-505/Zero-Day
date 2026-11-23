@@ -83,3 +83,18 @@ def test_plain_window_on_the_dummy_driver_is_scale_1(scale):
     assert hidpi.K == 1.0 and s.get_size() == (1600, 900)
     assert d.to_logical((123, 45)) == (123, 45)
     assert d.refit() is False
+
+
+def test_plain_window_can_draw_sharper(scale, monkeypatch):
+    """The browser build makes its canvas devicePixelRatio times larger (ZERO_DAY_SCALE does the same here)."""
+    monkeypatch.setenv("ZERO_DAY_SCALE", "2")
+    d = hidpi.Display("test")
+    s = d.open((468, 1013), False)
+    try:
+        assert s.get_size() == (468, 1013) and s.real.get_size() == (936, 2026)
+        assert d.to_logical((200, 400)) == (100, 200)
+        ev = d.map_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(200, 400), button=1))
+        assert ev.pos == (100, 200)
+    finally:
+        monkeypatch.delenv("ZERO_DAY_SCALE")
+        d.open((1600, 900), False)

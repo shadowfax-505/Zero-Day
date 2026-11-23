@@ -14,9 +14,10 @@ screens alike, in a window of any size or in fullscreen.
     Display       the window: picks the scale, shows the canvas, maps the mouse back
     mouse_pos()   mouse position in logical coordinates
 
-In the browser (pygbag) and with SDL's dummy driver (tests) the scale is 1 and
-pygame's own SCALED window is used, as before. Set ZERO_DAY_HIDPI=0 to force
-that on a computer too."""
+In the browser (pygbag) and with SDL's dummy driver (tests) pygame's own SCALED
+window is used. In the browser it is made devicePixelRatio times larger (up to
+2x), so phones and Retina laptops stay sharp. In tests the scale is 1 unless
+ZERO_DAY_SCALE is set. ZERO_DAY_HIDPI=0 forces the SCALED window on a computer."""
 
 import math
 import os
@@ -311,6 +312,32 @@ def _want_hidpi():
     return pygame.display.get_driver() not in ("dummy", "offscreen")
 
 
+WEB_K_MAX = 2.0     # the browser draws in WebAssembly: at most 2x the pixels, so phones stay smooth
+
+
+def _plain_scale(logical):
+    """Pixels per logical pixel for the SCALED display. In the browser the canvas is made as many
+    pixels as the page shows it at (devicePixelRatio), so phones and Retina screens get sharp text
+    instead of a stretched picture. ZERO_DAY_SCALE forces a value (for trying it on a computer)."""
+    v = os.environ.get("ZERO_DAY_SCALE")
+    if v:
+        try:
+            return max(0.5, min(3.0, float(v)))
+        except ValueError:
+            pass
+    if not WEB:
+        return 1.0
+    try:
+        import platform as _pf
+        dpr = float(_pf.window.devicePixelRatio or 1)
+        vw, vh = float(_pf.window.innerWidth), float(_pf.window.innerHeight)
+    except Exception:  # noqa: BLE001
+        return 1.0
+    lw, lh = logical
+    k = min(vw * dpr / lw, vh * dpr / lh)
+    return max(1.0, min(WEB_K_MAX, round(k * 4) / 4))
+
+
 class Display:
     """The game window. On a computer: a high-DPI window that the canvas is fitted into
     (letterboxed to keep the shape), drawn at the window's real pixel size. Elsewhere:
@@ -326,6 +353,7 @@ class Display:
         self.screen = None
         self.dest = None
         self._pixels = None
+        self.plain_k = 1.0
         _display = self
 
     # setup
@@ -340,12 +368,13 @@ class Display:
                 print("Zero Day: high-DPI window unavailable, using a scaled one:", e)
                 self.hidpi = False
         if not self.hidpi:
-            K = 1.0
+            K = self.plain_k = _plain_scale(self.logical)
             if pygame.display.get_surface() is not None and pygame.display.get_driver() in ("dummy", "offscreen"):
                 pygame.display.quit()        # SDL's software-only drivers crash if a SCALED window changes size
                 pygame.display.init()
             flags = pygame.SCALED | (pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE)
-            self.screen = Canvas(pygame.display.set_mode(self.logical, flags), 1.0, self.logical)
+            real = (round(self.logical[0] * K), round(self.logical[1] * K))
+            self.screen = Canvas(pygame.display.set_mode(real, flags), K, self.logical)
             pygame.display.set_caption(self.title)
             return self.screen
         self._pixels = None
@@ -416,7 +445,10 @@ class Display:
         r.present()
 
     def to_logical(self, pos):
-        if not self.hidpi or self.dest is None:
+        if not self.hidpi:
+            k = self.plain_k
+            return pos if k == 1 else (int(pos[0] / k), int(pos[1] / k))
+        if self.dest is None:
             return pos
         ww, wh = self.window.size
         pw, ph = self._pixels
@@ -426,11 +458,13 @@ class Display:
 
     def map_event(self, ev):
         """The event with its mouse position in logical coordinates."""
-        if not self.hidpi or not hasattr(ev, "pos"):
+        if not hasattr(ev, "pos") or (not self.hidpi and self.plain_k == 1):
             return ev
         d = dict(ev.dict)
         d["pos"] = self.to_logical(ev.pos)
-        if "rel" in d and self._pixels:
+        if "rel" in d and not self.hidpi:
+            d["rel"] = (int(d["rel"][0] / self.plain_k), int(d["rel"][1] / self.plain_k))
+        elif "rel" in d and self._pixels:
             sx = self._pixels[0] / max(1, self.window.size[0]) / K
             d["rel"] = (int(d["rel"][0] * sx), int(d["rel"][1] * sx))
         return pygame.event.Event(ev.type, d)
