@@ -8,7 +8,7 @@
 
 The rest of this file is how we set those up, in case you want to run your own copy.
 
-There are three pieces, and each one is free:
+There are three pieces and each one is free:
 
 | Piece | What it is | Where it runs |
 |---|---|---|
@@ -17,14 +17,14 @@ There are three pieces, and each one is free:
 | **Desktop apps** | Windows installer, macOS .dmg (Apple Silicon and Intel), Linux AppImage (PyInstaller) | GitHub Releases |
 
 The relay never runs the game. Both players' copies run the same match in lockstep, exactly as in
-direct LAN play, and only moves and chat go through the server. Desktop copies can still play
+direct LAN play and only moves and chat go through the server. Desktop copies can still play
 directly on the same network (or by IP) without the relay. Browser players always use the relay,
 and a browser player and a desktop player can play each other through it.
 
 ## 1. Deploy the relay server (Render, about 5 minutes)
 
 1. Sign in at <https://render.com> with your GitHub account.
-2. **New → Blueprint**, pick the `Zero-Day` repository, and confirm. Render reads `render.yaml`
+2. **New → Blueprint**, pick the `Zero-Day` repository and confirm. Render reads `render.yaml`
    and creates a free web service called `zero-day-relay`.
 3. When it shows **Live**, open its URL (for example `https://zero-day-relay.onrender.com`).
    You should see `Zero Day relay OK. 0 room(s) open.`
@@ -33,7 +33,7 @@ and a browser player and a desktop player can play each other through it.
    commit. Players can also type it in the lobby's **SERVER** row.
 
 A free Render service goes to sleep after 15 minutes without visitors. The first player to connect
-after that waits up to a minute while it wakes up; the lobby says so on screen. For the showcase,
+after that waits up to a minute while it wakes up. The lobby says so on screen. For the showcase,
 open the relay URL in a browser a minute before you start.
 
 **Fly.io instead (always on, needs a card on file):** install `flyctl`, then from the `server/`
@@ -46,7 +46,7 @@ The relay address is `wss://<app-name>.fly.dev`.
 
 1. In the repository on GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 2. Every push to `main` runs `.github/workflows/web.yml`, which builds the game with pygbag,
-   plays it in a headless browser as a smoke test, and publishes it.
+   plays it in a headless browser as a smoke test and publishes it.
 3. The game is then at `https://shadowfax-505.github.io/Zero-Day/`.
 
 To point a page at a different relay without rebuilding, add it to the address:
@@ -55,9 +55,9 @@ To point a page at a different relay without rebuilding, add it to the address:
 ### itch.io (optional)
 
 1. Open the latest **Web build** run in the repository's **Actions** tab and download the
-   `zero-day-web-itch-io` artifact. Unzip it once; inside is `web.zip`.
+   `zero-day-web-itch-io` artifact. Unzip it once. Inside is `web.zip`.
 2. On itch.io: **Create new project → Kind of project: HTML**, upload `web.zip`, tick
-   **This file will be played in the browser**, and set the viewport to 1280 × 720 with the
+   **This file will be played in the browser** and set the viewport to 1280 × 720 with the
    fullscreen button on.
 
 ### Building it yourself

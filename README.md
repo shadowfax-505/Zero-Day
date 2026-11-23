@@ -24,8 +24,8 @@ techniques, all written from scratch.
 - **AI vs AI**, the main mode: watch the two AIs play, pause, step round by round and switch between
   Red's view, Blue's view and the full map.
 - **Human vs AI** as either side.
-- **Online play**: two people (or one person and an AI, or two AIs) on two computers, over the LAN, by
-  IP, or through a small relay server with a four-letter game code. Chat included.
+- **Online play**: two people (or one person and an AI or two AIs) on two computers, over the LAN, by
+  IP or through a small relay server with a four-letter game code. Chat included.
 - **Browser version** on GitHub Pages, with a proper phone layout and touch buttons.
 - **Two themes**: Paper (default) and Dark, plus a settings screen and a pause menu.
 - A batch runner and a genetic algorithm to measure and tune the AIs.
@@ -71,7 +71,7 @@ The apps are not signed with a paid developer certificate, so the system asks on
   open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
   Not sure which Mac you have? Apple menu → **About This Mac** shows "Chip: Apple M..." or "Processor: Intel".
 - **Linux:** `chmod +x ZeroDay-Linux-x86_64.AppImage` then run it. If it does not start, install FUSE
-  (`sudo apt install libfuse2`, or `libfuse2t64` on Ubuntu 24.04 and newer) or run it with
+  (`sudo apt install libfuse2` or `libfuse2t64` on Ubuntu 24.04 and newer) or run it with
   `--appimage-extract-and-run`.
 
 </details>
@@ -124,12 +124,12 @@ Point at any node to see what the current view knows about it. The RED / FULL / 
 top bar can be clicked too.
 
 **Playing as Red:** click a marked neighbouring node to capture it (or unlock it across a zone border,
-advance onto your own node, or claim the database). To scout, press `S`, click the SCOUT button at the
-top of the map, or click the node you're standing on. If Blue has isolated your only way out, the
+advance onto your own node or claim the database). To scout, press `S`, click the SCOUT button at the
+top of the map or click the node you're standing on. If Blue has isolated your only way out, the
 button turns into SCOUT AND PASS and a hint under the map tells you to wait it out.
 
 **Playing as Blue:** pick a tool with `Q` monitor, `W` patch, `E` decoy, `A` isolate, `D` restore (or
-click it in the tool bar above the map), click a node to use it, `Backspace` to undo, and `Enter` or the
+click it in the tool bar above the map), click a node to use it, `Backspace` to undo and `Enter` or the
 END TURN button to finish. If a move isn't allowed the game says why (for example "Isolate needs 2 AP,
 1 left"). With *Auto end-turn* on in Settings, the turn ends by itself once nothing else fits.
 
@@ -144,10 +144,10 @@ and the full view shows the truth.
 ### On a phone or tablet
 
 The browser version lays itself out for the screen it is on. On a phone held upright the map fills the
-width (turned so the three zones stack top to bottom); on its side the map sits next to the panels. The
-Red, Blue and Log panels share one tabbed pane you can drag to scroll, and a row of buttons along the
+width (turned so the three zones stack top to bottom). On its side the map sits next to the panels. The
+Red, Blue and Log panels share one tabbed pane you can drag to scroll and a row of buttons along the
 bottom does what the keys do: MENU (pause menu, the same as `Esc`), PLAY / PAUSE, STEP, VIEW and SPEED
-in AI vs AI, SCOUT as Red, the five tools plus UNDO and END TURN as Blue, and CHAT online. Typing a
+in AI vs AI, SCOUT as Red, the five tools plus UNDO and END TURN as Blue and CHAT online. Typing a
 name or game code brings up the phone's own keyboard. Turning the phone switches layout on the spot.
 
 On a computer, every key in the CONTROLS legend under the map can also be clicked or tapped. To try the
@@ -155,7 +155,7 @@ phone layouts on a computer: `ZERO_DAY_VIEWPORT=390x844 python main.py` (or `844
 
 ### Any screen size
 
-The window opens at the biggest size of the game's shape that fits the screen, and can be resized,
+The window opens at the biggest size of the game's shape that fits the screen and can be resized,
 maximised or made fullscreen (`F11`) at any time. The game is laid out at 1600 x 900, but it is drawn at the
 window's real pixel size (`ui/hidpi.py`), so text and lines stay sharp on Retina and 4K screens as well as
 on 1080p and small laptop screens. If the shape doesn't match, the rest of the window is filled with the
@@ -166,12 +166,12 @@ is sharp on phones and Retina laptops too.
 ### Themes and settings
 
 There are two themes. **Paper** (the default) draws the network like a printed operations map. **Dark** is
-the original neon look. Switch with `T`, in Settings, or with `--theme dark`.
+the original neon look. On the Dark menu the chosen map is shown in a panel on the right, as on the Paper menu. Switch with `T`, in Settings or with `--theme dark`.
 
 Settings (main menu or the pause menu) are saved to `~/.zero_day/settings.json`: theme, fullscreen,
 node labels, hover info, animations (full or reduced), FPS counter, default speed and view, auto next
 match (AI vs AI keeps playing new maps, handy for a demo loop), whether Blue's turn ends automatically
-when its action points run out, and sound effects with volume.
+when its action points run out and sound effects with volume.
 
 | Paper (default) | Dark |
 | --- | --- |
@@ -179,17 +179,17 @@ when its action points run out, and sound effects with volume.
 
 ### Online play
 
-Pick **PLAY ONLINE** in the menu. One player chooses **HOST A GAME**; the other sees that game under
+Pick **PLAY ONLINE** in the menu. One player chooses **HOST A GAME**. The other sees that game under
 *Games on your network* and clicks it (or types the host's address in **JOIN BY IP**). The host picks
 the sides and the joiner gets the other one. Each player only ever sees their own side's view, so the fog
 of war is real: Red never sees Blue's moves and Blue only sees alerts.
 
 **WHO PLAYS IT** decides whether you play or your AI plays for you, so the same screen covers human vs
-human, human vs AI across two laptops, and AI vs AI across two laptops. `C` opens chat.
+human, human vs AI across two laptops and AI vs AI across two laptops. `C` opens chat.
 
 **Rematch.** After a match either player can ask for a rematch: `R` on the same map, `N` on a new map,
 or `S` on the same map with the sides swapped (on a phone, the REMATCH / NEW MAP / SWAP SIDES buttons).
-The other player sees the offer and presses `Y` to accept or `X` to say no thanks; asking for the same
+The other player sees the offer and presses `Y` to accept or `X` to say no thanks. Asking for the same
 rematch they offered also accepts it. The new match starts on both screens without going back to the
 lobby, over LAN and through the server alike. The pause menu's *Restart* and *New map* send the same
 offer in the middle of a match.
@@ -235,14 +235,14 @@ sequenceDiagram
     H->>J: start (seed, host's side, match + 1)
 ```
 Hosts announce themselves on UDP port 5151 so they show up on the LAN without typing an IP. Over the
-internet the host needs port 5150 forwarded, or both players on a virtual LAN such as Tailscale or ZeroTier.
+internet the host needs port 5150 forwarded or both players on a virtual LAN such as Tailscale or ZeroTier.
 If a firewall prompt appears the first time you host, allow it.
 
 **Through the server.** Set **CONNECT** to *Through the server* to play anyone on any network, with
-nothing to forward: **HOST A GAME** shows a four-letter code, and the other player types it in **JOIN
+nothing to forward: **HOST A GAME** shows a four-letter code and the other player types it in **JOIN
 BY CODE** (or clicks the game in the list). This goes through a small relay (`server/relay.py`) that only
-passes the two players' messages along; the match still runs on both players' computers. It is the
-only option in the browser version, and a browser player and a desktop player can play each other this
+passes the two players' messages along. The match still runs on both players' computers. It is the
+only option in the browser version and a browser player and a desktop player can play each other this
 way. [DEPLOY.md](DEPLOY.md) shows how to put the relay on a free Render or Fly.io server.
 
 ---
@@ -317,13 +317,13 @@ sequenceDiagram
 | Monitor | Alerts in one zone are 1.6x as likely this round | 1 |
 | Patch | Halves a node's weakness (once per node) | 1 |
 | Decoy | Turns a node into a trap that looks very weak to Red. Stepping on it reveals Red's exact position | 2 |
-| Isolate | Cuts a node off for 2 rounds. If Red is on it, Red loses it and its move. One at a time, 2-round recharge, and the same node can't be isolated again for 4 rounds | 2 |
+| Isolate | Cuts a node off for 2 rounds. If Red is on it, Red loses it and its move. One at a time, 2-round recharge and the same node can't be isolated again for 4 rounds | 2 |
 | Restore | Takes back a node Red holds but is not standing on | 2 |
 
 **Alerts.** An alert fires where Red acted with probability `noise × sensitivity × 1.6 (if monitored)`.
 Every node also has a 2% false-alarm chance each round. Blue never knows which alerts are real.
 
-**Winning.** Red wins by claiming the database. Blue wins by holding out for 40 rounds, or by removing Red
+**Winning.** Red wins by claiming the database. Blue wins by holding out for 40 rounds or by removing Red
 from the network (restoring every node it holds, ending with the gateway, which can only be sealed after
 round 15 and costs the whole turn).
 
@@ -413,8 +413,8 @@ flowchart TB
 
 | Technique | File | What it does |
 | --- | --- | --- |
-| **A\* search** | `agents/red/astar.py` | Plans the cheapest route to the database over the nodes Red knows. Step cost `1 + λ·risk(v)` plus the expected number of retries, with `risk(v) = sensitivity × (1 − weakness) + P_decoy(v)`. Unknown territory is reached through optimistic "fog" links, and the straight-line heuristic never overestimates, so A\* stays optimal. |
-| **Information-Set MCTS** | `agents/red/ismcts.py` | Red cannot see decoys, patches or monitored zones. Each sample draws a full hidden state from the opponent model (determinisation), and every candidate first move is played from that same sample with the same random numbers (paired sampling), then UCT (`c = 1.4`) with availability counts, expansion, an A\*-guided rollout and back-propagation. Inside the rollouts Blue follows a response policy learned from 160 logged matches, and a leaf is scored by a logistic-regression win probability fitted on the same matches (`tuning/learn_from_matches.py`). Up to 1000 rollouts or 200 ms per move. MCTS overrides A\*'s step only when a paired test says it is better by a margin and about two standard errors. |
+| **A\* search** | `agents/red/astar.py` | Plans the cheapest route to the database over the nodes Red knows. Step cost `1 + λ·risk(v)` plus the expected number of retries, with `risk(v) = sensitivity × (1 − weakness) + P_decoy(v)`. Unknown territory is reached through optimistic "fog" links and the straight-line heuristic never overestimates, so A\* stays optimal. |
+| **Information-Set MCTS** | `agents/red/ismcts.py` | Red cannot see decoys, patches or monitored zones. Each sample draws a full hidden state from the opponent model (determinisation) and every candidate first move is played from that same sample with the same random numbers (paired sampling), then UCT (`c = 1.4`) with availability counts, expansion, an A\*-guided rollout and back-propagation. Inside the rollouts Blue follows a response policy learned from 160 logged matches and a leaf is scored by a logistic-regression win probability fitted on the same matches (`tuning/learn_from_matches.py`). Up to 1000 rollouts or 200 ms per move. MCTS overrides A\*'s step only when a paired test says it is better by a margin and about two standard errors. |
 | **Opponent model** | `agents/red/opponent_model.py` | Counts where Blue's defences have shown up (zones where Red got caught, decoys found, nodes isolated just before Red stepped on them, failed captures) and turns the counts into Laplace-smoothed probabilities. They feed `P_decoy` in A\* and the sampling in MCTS. |
 
 ### Blue AI: track the unseen, defend ahead
@@ -437,8 +437,8 @@ flowchart TB
 | --- | --- | --- |
 | **Bayesian particle filter** | `agents/blue/particle_filter.py` | 2000 particles, each a full guess about Red: the node it stands on and the set of nodes it holds. Predict (move along a link, biased toward the database), update (weight by the likelihood of the alerts and by how well each held set explains Blue's own isolate/restore results), systematic resampling. The share of particles holding a node is P(Red holds it now), which drives restores. A sprung decoy collapses the belief onto one node. |
 | **Fuzzy logic triage** | `agents/blue/fuzzy.py` | A Mamdani system with triangular memberships turns alert strength, node value and belief confidence into a threat score from 0 to 100 (12 rules, centroid defuzzification). Below `watch` Blue ignores a node, above `act` it acts. |
-| **Minimax + alpha-beta pruning** | `agents/blue/minimax.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points, and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
-| **Genetic algorithm** | `tuning/ga.py` | Tunes either side offline (`--side blue` or `--side red`): Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) and Red's 6 (A\* caution λ and how it changes, and the two MCTS override thresholds). Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is the side's win rate against the other side's current AI (Blue also gets a bonus for locating Red early), measured with racing: everyone plays the first third of the maps, the better half the second third, the best quarter all of them. Weights are saved to `tuning/best_weights.json` (Blue) and `tuning/red_weights.json` (Red) and loaded automatically. |
+| **Minimax + alpha-beta pruning** | `agents/blue/minimax.py` | Blue moves first and Red replies, so Blue maximises over its own plans and assumes Red minimises with its best reply. Blue builds candidate allocations of its 3 action points and for each one assumes Red's best response (fast route search on Blue's map) from each likely Red position. It looks two rounds ahead with alpha-beta pruning and picks `argmax_a Σ_p b(p) · min_r U(a, p, r)`. |
+| **Genetic algorithm** | `tuning/ga.py` | Tunes either side offline (`--side blue` or `--side red`): Blue's 13 weights (utility weights, fuzzy thresholds and membership peaks, particle motion model) and Red's 6 (A\* caution λ and how it changes and the two MCTS override thresholds). Tournament selection (size 3), uniform crossover, Gaussian mutation, elitism of 2. Fitness is the side's win rate against the other side's current AI (Blue also gets a bonus for locating Red early), measured with racing: everyone plays the first third of the maps, the better half the second third, the best quarter all of them. Weights are saved to `tuning/best_weights.json` (Blue) and `tuning/red_weights.json` (Red) and loaded automatically. |
 
 How the genetic algorithm tunes a side:
 
@@ -479,7 +479,7 @@ python -m experiments.trace_scenario --seed 42 --round 5   # every number both A
 
 `trace_scenario` replays a Red AI vs Blue AI match up to the given round and prints the whole
 decision: Red's opponent model, the A\* expansions with g, h and f, the IS-MCTS tree and the paired
-test, Blue's particle filter (prior, likelihood, posterior), the fuzzy rules that fired, and the
+test, Blue's particle filter (prior, likelihood, posterior), the fuzzy rules that fired and the
 minimax tree with the alpha-beta cut-offs. It checks its numbers against what the AIs really
 returned, so the trace in the report is the game's own reasoning.
 
@@ -508,12 +508,12 @@ What this shows:
 - The GA was run as co-evolution: Blue first (41 generations, 30 × 30), then Red against that Blue
   (8 generations, 14 genomes, racing), then Blue again against the tuned Red. The third round's best
   genome won its fast-budget re-test but lost at full budget (36% instead of 42%), so we kept the
-  first-round Blue weights; the round-3 genome is saved as `tuning/best_weights_round3.json`. Against the
-  tuned Red, Blue's tuning is worth only 1 point (41% → 42%); against the untuned Red it was 8.
+  first-round Blue weights. The round-3 genome is saved as `tuning/best_weights_round3.json`. Against the
+  tuned Red, Blue's tuning is worth only 1 point (41% → 42%). Against the untuned Red it was 8.
 - MCTS was rebuilt to give it a fair chance: Blue's behaviour inside the rollouts is now learned from
-  160 logged matches, leaves are scored by a learned win probability, and every candidate move is
+  160 logged matches, leaves are scored by a learned win probability and every candidate move is
   compared on the same sampled worlds with a paired significance test. That made its estimates precise
-  enough to trust, and the experiments then gave a clear answer: whenever MCTS overruled A\* (with
+  enough to trust and the experiments then gave a clear answer: whenever MCTS overruled A\* (with
   thresholds of 0, 0.02, 0.03 and 0.06) Red won the same or less. The GA independently set the threshold
   to 0.11, where MCTS still runs every move, shows its numbers in the Red panel and acts as a check, but
   overrules A\* almost never, so the "A\* only" row equals the full Red. With a good cost model, A\*'s
@@ -551,9 +551,10 @@ python -m pytest -q
 
 The tests cover the rules engine, the observations each side gets (so neither AI can peek), two copies of
 a match staying in lockstep over the network and through the relay (including repairing a forced desync),
-the phone layouts, the Red "cut off" case, and the AI parts (particle held sets, paired MCTS sampling,
-the learned models and the GA genes). The browser build also gets a smoke test in GitHub Actions (`tools/web_smoke.py`): it
-loads the page in headless Chromium, starts a match, and taps through the phone layout.
+the phone layouts, sharp drawing at any pixel density, the Red "cut off" case, the traced round from the
+report (map 42, round 5) and the AI parts (particle held sets, paired MCTS sampling, the learned models and
+the GA genes). There are 32 tests. On a Mac run them with `SDL_VIDEODRIVER=dummy` in front of the command. The browser build also gets a smoke test in GitHub Actions (`tools/web_smoke.py`): it
+loads the page in headless Chromium, starts a match and taps through the phone layout.
 
 ## Balancing notes
 
@@ -562,7 +563,7 @@ the first version was far too strong for Blue (Red won 0% of matches), so these 
 
 - Unlock is one action that crosses the border and takes the node behind it (it used to be two actions).
 - Restore costs 2 and cannot pull Red off the node it is standing on (that is what Isolate is for).
-- Isolate lasts 2 rounds, only one node can be isolated at a time, and it needs 2 rounds to recharge.
+- Isolate lasts 2 rounds, only one node can be isolated at a time and it needs 2 rounds to recharge.
 - Patch works once per node. Each failed capture makes the next try on that node a little easier.
 - Scouting also maps the neighbours' links. The gateway can only be sealed after round 15 and costs 3 points.
 
@@ -577,4 +578,4 @@ Every knob is in `engine/config.py`.
 
 ## Credits
 
-Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (paper theme), Inter and DejaVu Sans Mono (dark theme), all under free licences; see `assets/fonts/`.
+Fonts: IBM Plex Sans, IBM Plex Mono and Barlow Condensed (paper theme), Inter and DejaVu Sans Mono (dark theme), all under free licences. See `assets/fonts/`.

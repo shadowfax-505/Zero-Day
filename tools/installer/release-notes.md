@@ -22,7 +22,7 @@ The apps are not signed with a paid developer certificate, so the system asks on
 
 - **Windows:** if SmartScreen says "Windows protected your PC", click **More info** then **Run anyway**.
 - **macOS:** if it says the app "cannot be opened", open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Zero Day. On macOS 14 or older you can also right-click the app, choose **Open** then **Open** again.
-- **Linux:** if the AppImage does not start, install FUSE (`sudo apt install libfuse2`, or `libfuse2t64` on Ubuntu 24.04 and newer) or run it with `--appimage-extract-and-run`.
+- **Linux:** if the AppImage does not start, install FUSE (`sudo apt install libfuse2` or `libfuse2t64` on Ubuntu 24.04 and newer) or run it with `--appimage-extract-and-run`.
 
 ## Modes
 
