@@ -5,8 +5,8 @@
 # Every build is started headless and has to play a few seconds of an AI vs AI match before it counts.
 #
 # Push a tag like v1.1 (git tag v1.1 && git push origin v1.1) to publish a GitHub Release with all of them.
-# Run it by hand from the Actions tab to get them as build artifacts, or give a tag that already
-# has a release (for example v1.0) to add the new files to that release.
+# Or run it by hand from the Actions tab: leave the box empty to only get the files as build artifacts,
+# or type a tag (for example v1.1) to publish that release. A new tag is created on the commit it ran from.
 name: Desktop builds
 
 on:
@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Also add the files to the release with this tag (leave empty to only build)"
+        description: "Publish to the release with this tag, created if new (leave empty to only build)"
         required: false
         default: ""
 
@@ -96,16 +96,12 @@ jobs:
           path: release
           merge-multiple: true
       - run: ls -l release
-      - name: Publish the release (new tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          name: Zero Day ${{ github.ref_name }}
+          # a manual run with a new tag name creates that tag on the commit it ran from
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: Zero Day ${{ inputs.release_tag || github.ref_name }}
           body_path: tools/installer/release-notes.md
-          files: release/*
-      - name: Add the files to an existing release
-        if: inputs.release_tag != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.release_tag }}
           files: release/*

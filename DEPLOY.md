@@ -91,8 +91,9 @@ image are tested the same way after installing from them.
 * **Make a release:** `git tag v1.1 && git push origin v1.1`. All six files are attached to a GitHub
   Release called v1.1 about 10 minutes later, with the download table from
   `tools/installer/release-notes.md` as its description.
-* **Add the files to a release that already exists:** **Actions → Desktop builds → Run workflow** and
-  type its tag (for example `v1.0`) in the box.
+* **Release without pushing a tag:** **Actions → Desktop builds → Run workflow** on `main` and type
+  the tag (for example `v1.1`) in the box. The tag and the release are created when the builds pass.
+  Typing a tag that already has a release (for example `v1.0`) adds the files to it.
 * **Just try a build:** **Actions → Desktop builds → Run workflow** with the box left empty, then
   download the files from the run page.
 
