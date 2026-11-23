@@ -8,6 +8,7 @@ import random
 import pygame
 
 from ui import theme as T
+from ui import hidpi
 
 
 def text(surf, s, pos, size=14, color=T.TEXT, weight="regular", mono=False, anchor="topleft", alpha=None,
@@ -17,7 +18,7 @@ def text(surf, s, pos, size=14, color=T.TEXT, weight="regular", mono=False, anch
         img.set_alpha(alpha)
     r = img.get_rect(**{anchor: pos})
     if bg is not None:
-        pygame.draw.rect(surf, bg, r.inflate(4, -2))
+        hidpi.rect(surf, bg, r.inflate(4, -2))
     surf.blit(img, r)
     return r
 
@@ -42,7 +43,7 @@ def label(surf, s, pos, color=T.INK_2, anchor="topleft"):
 
 
 def hrule(surf, x0, x1, y, color=T.RULE, width=1):
-    pygame.draw.line(surf, color, (x0, y), (x1, y), width)
+    hidpi.line(surf, color, (x0, y), (x1, y), width)
 
 
 def dashed_line(surf, color, a, b, width=2, dash=8, gap=6, offset=0.0):
@@ -57,7 +58,7 @@ def dashed_line(surf, color, a, b, width=2, dash=8, gap=6, offset=0.0):
     while d < length:
         s0, s1 = max(0, d), min(length, d + dash)
         if s1 > s0:
-            pygame.draw.line(surf, color, (ax + ux * s0, ay + uy * s0), (ax + ux * s1, ay + uy * s1), width)
+            hidpi.line(surf, color, (ax + ux * s0, ay + uy * s0), (ax + ux * s1, ay + uy * s1), width)
         d += period
 
 
@@ -66,7 +67,7 @@ def dashed_circle(surf, color, center, r, width=1, n=20, rot=0.0):
     rect.center = center
     for i in range(0, n, 2):
         a0 = rot + i / n * 2 * math.pi
-        pygame.draw.arc(surf, color, rect, a0, a0 + 2 * math.pi / n, width)
+        hidpi.arc(surf, color, rect, a0, a0 + 2 * math.pi / n, width)
 
 
 def hatch(surf, rect, color, step=7, width=1):
@@ -74,15 +75,15 @@ def hatch(surf, rect, color, step=7, width=1):
     old = surf.get_clip()
     surf.set_clip(rect if old is None else rect.clip(old))
     for x in range(rect.x - rect.h, rect.right, step):
-        pygame.draw.line(surf, color, (x, rect.bottom), (x + rect.h, rect.y), width)
+        hidpi.line(surf, color, (x, rect.bottom), (x + rect.h, rect.y), width)
     surf.set_clip(old)
 
 
 def bar(surf, rect, frac, color, bg=T.PAPER_3, radius=0):
-    pygame.draw.rect(surf, bg, rect, border_radius=radius)
+    hidpi.rect(surf, bg, rect, border_radius=radius)
     w = int(rect.w * max(0.0, min(1.0, frac)))
     if w > 0:
-        pygame.draw.rect(surf, color, pygame.Rect(rect.x, rect.y, w, rect.h), border_radius=radius)
+        hidpi.rect(surf, color, pygame.Rect(rect.x, rect.y, w, rect.h), border_radius=radius)
 
 
 def arrowhead(surf, color, tip, frm, size=7):
@@ -90,20 +91,20 @@ def arrowhead(surf, color, tip, frm, size=7):
     pts = [tip,
            (tip[0] - size * math.cos(ang - 0.45), tip[1] - size * math.sin(ang - 0.45)),
            (tip[0] - size * math.cos(ang + 0.45), tip[1] - size * math.sin(ang + 0.45))]
-    pygame.draw.polygon(surf, color, pts)
+    hidpi.polygon(surf, color, pts)
 
 
 def diamond(surf, color, center, r, width=0):
     x, y = center
-    pygame.draw.polygon(surf, color, [(x, y - r), (x + r, y), (x, y + r), (x - r, y)], width)
+    hidpi.polygon(surf, color, [(x, y - r), (x + r, y), (x, y + r), (x - r, y)], width)
 
 
 def tag(surf, s, center, color, size=11, fill=None):
     """Small label on a paper chip, used for floating notes on the map."""
     img = T.font(size, "semibold", display=True).render(s, True, color)
     r = img.get_rect(center=center).inflate(10, 2)
-    pygame.draw.rect(surf, fill or T.PAPER, r)
-    pygame.draw.rect(surf, color, r, 1)
+    hidpi.rect(surf, fill or T.PAPER, r)
+    hidpi.rect(surf, color, r, 1)
     surf.blit(img, img.get_rect(center=r.center))
     return r
 
@@ -143,7 +144,7 @@ class Ripple(Effect):
         if self.dashed:
             dashed_circle(surf, c, self.pos, r, self.width, 18)
         else:
-            pygame.draw.circle(surf, c, self.pos, r, self.width)
+            hidpi.circle(surf, c, self.pos, r, self.width)
 
 
 class Beam(Effect):
@@ -160,14 +161,14 @@ class Beam(Effect):
         bx, by = self.b
         ex, ey = ax + (bx - ax) * reach, ay + (by - ay) * reach
         c = T.fade(self.color, max(0.0, (k - 0.6) / 0.4))
-        pygame.draw.line(surf, c, self.a, (ex, ey), 3)
+        hidpi.line(surf, c, self.a, (ex, ey), 3)
         if reach > 0.05:
             arrowhead(surf, c, (ex, ey), self.a, 9)
         if not self.success and k > 0.4:
             x, y = ex, ey
             s = 6
-            pygame.draw.line(surf, c, (x - s + 8, y - s), (x + s + 8, y + s), 2)
-            pygame.draw.line(surf, c, (x - s + 8, y + s), (x + s + 8, y - s), 2)
+            hidpi.line(surf, c, (x - s + 8, y - s), (x + s + 8, y + s), 2)
+            hidpi.line(surf, c, (x - s + 8, y + s), (x + s + 8, y - s), 2)
 
 
 class Burst(Effect):
@@ -187,9 +188,9 @@ class Burst(Effect):
             a = i * math.pi / 4 + math.pi / 8
             p0 = (x + math.cos(a) * r0, y + math.sin(a) * r0)
             p1 = (x + math.cos(a) * (r0 + 7), y + math.sin(a) * (r0 + 7))
-            pygame.draw.line(surf, c, p0, p1, 2)
+            hidpi.line(surf, c, p0, p1, 2)
         if k < 0.5:
-            pygame.draw.circle(surf, c, self.pos, int(self.size * 0.55), 2)
+            hidpi.circle(surf, c, self.pos, int(self.size * 0.55), 2)
 
 
 class FloatText(Effect):
@@ -203,9 +204,9 @@ class FloatText(Effect):
         y = self.pos[1] - 22 - 14 * _ease(k)
         img = T.font(self.size + 2, "bold", display=True).render(self.s, True, self.color)
         r = img.get_rect(midbottom=(self.pos[0], y)).inflate(10, 0)
-        chip = pygame.Surface(r.size, pygame.SRCALPHA)
+        chip = hidpi.Surface(r.size, pygame.SRCALPHA)
         chip.fill((*T.PAPER, 240))
-        pygame.draw.rect(chip, (*self.color, 255), chip.get_rect(), 1)
+        hidpi.rect(chip, (*self.color, 255), chip.get_rect(), 1)
         chip.blit(img, img.get_rect(center=(r.w // 2, r.h // 2)))
         chip.set_alpha(a)
         surf.blit(chip, r)
@@ -222,6 +223,6 @@ class Flash(Effect):
         a = int(self.strength * (1 - self.k) ** 2)
         if a <= 0:
             return
-        s = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        s = hidpi.Surface(surf.get_size(), pygame.SRCALPHA)
         s.fill((*self.color, a))
         surf.blit(s, (0, 0))

@@ -18,7 +18,7 @@ def main():
     data = [("assets", "assets")] + [(os.path.join("tuning", f), "tuning") for f in
                                      ("best_weights.json", "red_weights.json", "blue_policy.json", "red_value.json")]
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "Zero Day",
-            "--hidden-import", "websockets.sync.client"]
+            "--hidden-import", "websockets.sync.client", "--hidden-import", "pygame._sdl2.video"]
     for src, dst in data:
         args += ["--add-data", f"{os.path.join(ROOT, src)}{SEP}{dst}"]
     args.append(os.path.join(ROOT, "main.py"))

@@ -9,6 +9,7 @@ from engine import config as C
 from ui import fx
 from ui import theme as T
 from ui.board import VIEW_NAMES
+from ui import hidpi
 
 ACTION_WORD = {"scout": "Scout", "capture": "Capture", "unlock": "Unlock", "advance": "Advance", "claim": "Claim",
                "monitor": "Monitor", "patch": "Patch", "decoy": "Decoy", "isolate": "Isolate", "restore": "Restore"}
@@ -46,14 +47,14 @@ def view_rects():
 
 def draw_top(surf, match, view, speed, paused, mode_label, t):
     g, net = match.game, match.net
-    pygame.draw.rect(surf, T.PAPER, (0, 0, T.W, T.TOP_H))
-    pygame.draw.line(surf, T.INK, (0, T.TOP_H - 1), (T.W, T.TOP_H - 1), 2)
+    hidpi.rect(surf, T.PAPER, (0, 0, T.W, T.TOP_H))
+    hidpi.line(surf, T.INK, (0, T.TOP_H - 1), (T.W, T.TOP_H - 1), 2)
 
     # masthead
-    pygame.draw.rect(surf, T.RED, (24, 20, 8, 24))
-    pygame.draw.rect(surf, T.BLUE, (34, 20, 8, 24))
+    hidpi.rect(surf, T.RED, (24, 20, 8, 24))
+    hidpi.rect(surf, T.BLUE, (34, 20, 8, 24))
     fx.text(surf, "ZERO DAY", (52, 32), 34, T.INK, "bold", display=True, anchor="midleft")
-    pygame.draw.line(surf, T.RULE, (170, 18), (170, 46))
+    hidpi.line(surf, T.RULE, (170, 18), (170, 46))
     fx.spaced(surf, mode_label, (184, 32), 15, T.INK_2, "semibold", 2, anchor="midleft")
 
     # round counter with a ruler of 40 ticks
@@ -67,7 +68,7 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
         x = x0 + i * 6
         done = i < r_now
         h = 14 if (i + 1) % 10 == 0 else 9
-        pygame.draw.line(surf, T.INK if done else T.RULE, (x, 40 - h), (x, 40), 2)
+        hidpi.line(surf, T.INK if done else T.RULE, (x, 40 - h), (x, 40), 2)
 
     # view switch: one segmented control (clickable in AI vs AI, see view_rects)
     rects = view_rects()
@@ -77,11 +78,11 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
         active = v == view
         col = {"red": T.RED, "blue": T.BLUE, "full": T.INK}[v]
         if active:
-            pygame.draw.rect(surf, col, r)
+            hidpi.rect(surf, col, r)
         fx.spaced(surf, VIEW_LABEL[v], r.center, 15, T.PAPER if active else T.INK_2, "semibold", 2, anchor="center")
         if i:
-            pygame.draw.line(surf, T.INK, (r.x, r.y), (r.x, r.bottom - 1))
-    pygame.draw.rect(surf, T.INK, box, 1)
+            hidpi.line(surf, T.INK, (r.x, r.y), (r.x, r.bottom - 1))
+    hidpi.rect(surf, T.INK, box, 1)
     fx.spaced(surf, "VIEW", (box.x - 10, 32), 15, T.INK_3, "semibold", 2, anchor="midright")
     state = "paused" if paused else f"{speed:g}x"
     fx.text(surf, f"map {net.seed}   {state}", (box.x - 70, 33), 13, T.INK_2, "medium", mono=True,
@@ -90,8 +91,8 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
 
 # -- side panels ------------------------------------------------------------------
 def _frame(surf, rect, color, title, sub):
-    pygame.draw.rect(surf, T.PAPER, rect)
-    pygame.draw.rect(surf, color, (rect.x, rect.y, rect.w, 5))
+    hidpi.rect(surf, T.PAPER, rect)
+    hidpi.rect(surf, color, (rect.x, rect.y, rect.w, 5))
     fx.text(surf, title, (rect.x + 20, rect.y + 16), 26, color, "bold", display=True)
     fx.text(surf, sub, (rect.x + 20, rect.y + 48), 12, T.INK_2, "regular")
 
@@ -115,7 +116,7 @@ SWITCH_HINT = "Press V to switch view"     # ui/mobile.py swaps in the touch wor
 def _hidden(surf, rect, color, who, can_switch=True):
     box = pygame.Rect(rect.x + 20, rect.y + 80, rect.w - 40, rect.h - 100)
     fx.hatch(surf, box, T.PAPER_3, 9, 1)
-    pygame.draw.rect(surf, T.RULE, box, 1)
+    hidpi.rect(surf, T.RULE, box, 1)
     fx.tag(surf, f"NOT VISIBLE IN {who.upper()}'S VIEW", (box.centerx, box.centery - 12), color, 15)
     fx.text(surf, SWITCH_HINT if can_switch else "Hidden by the fog of war",
             (box.centerx, box.centery + 16), 12, T.INK_2, "regular", anchor="center")
@@ -203,11 +204,11 @@ def draw_red_panel(surf, rect, match, view, human=False, human_help=None, subtit
                 y += 24
             r = pygame.Rect(cx, y, wlab, 19)
             col = T.OCHRE if lab == "DB" else (T.INK_3 if lab == "?" else T.RED)
-            pygame.draw.rect(surf, col, r, 1)
+            hidpi.rect(surf, col, r, 1)
             fx.text(surf, lab, r.center, 11, col, "medium", mono=True, anchor="center")
             cx += wlab
             if i < len(steps) - 1:
-                pygame.draw.line(surf, T.INK_3, (cx + 2, r.centery), (cx + 9, r.centery), 1)
+                hidpi.line(surf, T.INK_3, (cx + 2, r.centery), (cx + 9, r.centery), 1)
                 cx += 12
         y += 30
     sus = [(u, p) for u, p in d.get("decoy_suspects", []) if p > 0.05]
@@ -256,7 +257,7 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
     fx.bar(surf, gr, mt / 100, col)
     for thr in (match.blue.weights["watch"], match.blue.weights["act"]):
         tx = gr.x + int(gr.w * thr / 100)
-        pygame.draw.line(surf, T.INK, (tx, gr.y - 4), (tx, gr.bottom + 3), 1)
+        hidpi.line(surf, T.INK, (tx, gr.y - 4), (tx, gr.bottom + 3), 1)
     y += 36
     for u, sc, level in (d.get("threat_top") or [])[:3]:
         fx.text(surf, net.label[u], (x, y), 12, T.INK, "regular", mono=True)
@@ -272,7 +273,7 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
         cost = C.action_cost(a[0], a[1], net.gateway)
         fx.text(surf, blue_act_text(net, a), (x, y), 15, T.INK, "semibold")
         for i in range(cost):
-            pygame.draw.rect(surf, T.BLUE, (x + w - 8 - i * 12, y + 6, 8, 8))
+            hidpi.rect(surf, T.BLUE, (x + w - 8 - i * 12, y + 6, 8, 8))
         y += 22
     if not d.get("actions"):
         fx.text(surf, "Hold (no action)", (x, y), 13, T.INK_3, "regular")
@@ -300,8 +301,8 @@ def draw_bottom(surf, log_lines, controls, t):
     """Returns [(keycap, rect)] so the key chips can be clicked or tapped too."""
     chips = []
     r = pygame.Rect(0, T.H - T.BOTTOM_H, T.W, T.BOTTOM_H)
-    pygame.draw.rect(surf, T.PAPER, r)
-    pygame.draw.line(surf, T.INK, r.topleft, r.topright, 2)
+    hidpi.rect(surf, T.PAPER, r)
+    hidpi.line(surf, T.INK, r.topleft, r.topright, 2)
     fx.label(surf, "Move log", (24, r.y + 12))
     y = r.y + 38
     for i, (rnd, col, s) in enumerate(log_lines[-5:]):
@@ -312,7 +313,7 @@ def draw_bottom(surf, log_lines, controls, t):
         y += 21
 
     # controls: two columns of keycaps
-    pygame.draw.line(surf, T.RULE, (1010, r.y + 14), (1010, T.H - 14))
+    hidpi.line(surf, T.RULE, (1010, r.y + 14), (1010, T.H - 14))
     fx.label(surf, "Controls", (1032, r.y + 12))
     cols = [1032, 1300]
     x_i, y = 0, r.y + 38
@@ -322,9 +323,9 @@ def draw_bottom(surf, log_lines, controls, t):
         kw = max(22, f.size(keycap)[0] + 12)
         kr = pygame.Rect(x, y, kw, 20)
         chips.append((keycap, pygame.Rect(kr.x - 4, kr.y - 3, kw + 18 + f.size(label)[0], 26)))
-        pygame.draw.rect(surf, T.PAPER_2, kr)
-        pygame.draw.rect(surf, T.INK_2, kr, 1)
-        pygame.draw.line(surf, T.INK_2, (kr.x + 1, kr.bottom), (kr.right - 1, kr.bottom), 1)
+        hidpi.rect(surf, T.PAPER_2, kr)
+        hidpi.rect(surf, T.INK_2, kr, 1)
+        hidpi.line(surf, T.INK_2, (kr.x + 1, kr.bottom), (kr.right - 1, kr.bottom), 1)
         fx.text(surf, keycap, kr.center, 11, T.INK, "medium", mono=True, anchor="center")
         fx.text(surf, label, (kr.right + 10, y + 10), 12, T.INK_2, "regular", anchor="midleft")
         y += 26

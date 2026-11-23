@@ -10,6 +10,7 @@ from engine import config as C
 from engine.mapgen import ZONE_X
 from ui.neon import fx
 from ui.neon import theme as T
+from ui import hidpi
 
 VIEWS = ["red", "full", "blue"]
 VIEW_NAMES = {"red": "RED'S VIEW", "full": "FULL VIEW", "blue": "BLUE'S VIEW"}
@@ -79,18 +80,18 @@ class Board:
             held_both = show_red and u in g.red_held and v in g.red_held
             if held_both:
                 col = T.scale(T.RED, 0.55)
-                pygame.draw.line(surf, col, a, b, 3)
+                hidpi.line(surf, col, a, b, 3)
             elif gate and not opened:
                 fx.dashed_line(surf, T.scale(T.EDGE_LIT, 0.9), a, b, 2, 6, 5)
             else:
-                pygame.draw.line(surf, T.EDGE if not gate else T.EDGE_LIT, a, b, 2)
+                hidpi.line(surf, T.EDGE if not gate else T.EDGE_LIT, a, b, 2)
             if gate:
                 m = ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2)
                 lock_col = T.RED_SOFT if opened and show_red else T.BLUE_SOFT
-                pygame.draw.circle(surf, T.BG, m, 6)
-                pygame.draw.circle(surf, lock_col, m, 6, 2)
+                hidpi.circle(surf, T.BG, m, 6)
+                hidpi.circle(surf, lock_col, m, 6, 2)
                 if not opened:
-                    pygame.draw.line(surf, lock_col, (m[0] - 2, m[1]), (m[0] + 2, m[1]), 2)
+                    hidpi.line(surf, lock_col, (m[0] - 2, m[1]), (m[0] + 2, m[1]), 2)
 
         self._draw_pulses(surf, known_edges, t)
         if view == "red":
@@ -131,7 +132,7 @@ class Board:
                 p = self.pts[u]
                 x, y = p[0] + self.radius(u) + 4, p[1] - self.radius(u) - 4
                 col = T.AMBER if (real or view == "blue") else T.DIM
-                pygame.draw.polygon(surf, col, [(x, y - 8), (x + 7, y + 5), (x - 7, y + 5)])
+                hidpi.polygon(surf, col, [(x, y - 8), (x + 7, y + 5), (x - 7, y + 5)])
                 fx.text(surf, "!", (x, y + 1), 10, T.BG, "black", anchor="center")
 
         # Red's marker
@@ -139,21 +140,21 @@ class Board:
             p = self.pts[g.red_pos]
             pulse = 0.5 + 0.5 * math.sin(t * 5)
             fx.blit_glow(surf, p, int(40 + 10 * pulse), T.RED, 1.1)
-            pygame.draw.circle(surf, T.RED, p, int(self.radius(g.red_pos) + 7 + 3 * pulse), 2)
+            hidpi.circle(surf, T.RED, p, int(self.radius(g.red_pos) + 7 + 3 * pulse), 2)
             # chevron above
             x, y = p[0], p[1] - self.radius(g.red_pos) - 16 - 3 * pulse
-            pygame.draw.polygon(surf, T.RED, [(x - 7, y - 6), (x + 7, y - 6), (x, y + 2)])
+            hidpi.polygon(surf, T.RED, [(x - 7, y - 6), (x + 7, y - 6), (x, y + 2)])
 
     def _draw_zones(self, surf, g, view, t, monitored_preview):
         mon = set(monitored_preview)
         for z, r in enumerate(self.zone_rects):
-            s = pygame.Surface(r.size, pygame.SRCALPHA)
-            pygame.draw.rect(s, (*T.ZONE_TINT[z], 46), s.get_rect(), border_radius=18)
+            s = hidpi.Surface(r.size, pygame.SRCALPHA)
+            hidpi.rect(s, (*T.ZONE_TINT[z], 46), s.get_rect(), border_radius=18)
             if z in mon and view != "red":
                 a = int(90 + 60 * math.sin(t * 4))
-                pygame.draw.rect(s, (*T.BLUE, a), s.get_rect(), 2, border_radius=18)
+                hidpi.rect(s, (*T.BLUE, a), s.get_rect(), 2, border_radius=18)
             else:
-                pygame.draw.rect(s, (*T.ZONE_TINT[z], 140), s.get_rect(), 1, border_radius=18)
+                hidpi.rect(s, (*T.ZONE_TINT[z], 140), s.get_rect(), 1, border_radius=18)
             surf.blit(s, r.topleft)
             label = f"ZONE {z + 1} · {C.ZONE_NAMES[z]}"
             fx.spaced(surf, label, (r.x + 16, r.y + 10), 11, T.MUTED, "semibold", 2)
@@ -166,13 +167,13 @@ class Board:
         key = frozenset(visible)
         if getattr(self, "_fog_key", None) != key:
             self._fog_key = key
-            fog = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+            fog = hidpi.Surface(self.rect.size, pygame.SRCALPHA)
             fog.fill((6, 11, 26, 215))
-            hole = pygame.Surface((240, 240), pygame.SRCALPHA)
+            hole = hidpi.Surface((240, 240), pygame.SRCALPHA)
             hole.fill((6, 11, 26, 215))
             for i in range(120, 0, -3):
                 a = int(215 * (i / 120) ** 1.6)
-                pygame.draw.circle(hole, (6, 11, 26, a), (120, 120), i)
+                hidpi.circle(hole, (6, 11, 26, a), (120, 120), i)
             for u in visible:
                 p = self.pts[u]
                 fog.blit(hole, (p[0] - self.rect.x - 120, p[1] - self.rect.y - 120),
@@ -221,28 +222,28 @@ class Board:
         if isolated:
             ring = (110, 120, 140)
             fill = (20, 22, 30)
-        pygame.draw.circle(surf, fill, p, r)
-        pygame.draw.circle(surf, ring, p, r, 2)
+        hidpi.circle(surf, fill, p, r)
+        hidpi.circle(surf, ring, p, r, 2)
         if kind == "database":
             ang = t * 0.8
             rect = pygame.Rect(0, 0, 2 * r + 16, 2 * r + 16)
             rect.center = p
             for i in range(3):
                 a0 = ang + i * 2 * math.pi / 3
-                pygame.draw.arc(surf, T.GOLD, rect, a0, a0 + 1.2, 2)
+                hidpi.arc(surf, T.GOLD, rect, a0, a0 + 1.2, 2)
             fx.text(surf, "DB", p, 13, T.GOLD, "black", anchor="center")
         elif kind == "gateway":
             fx.text(surf, "GW", p, 11, (220, 228, 245), "bold", anchor="center")
         else:
             inner = {"bridge": 4, "fileserver": 3, "storage": 3, "server": 3, "workstation": 2}[kind]
-            pygame.draw.circle(surf, ring, p, inner)
+            hidpi.circle(surf, ring, p, inner)
 
         # Blue-only markers
         if show_blue:
             if u in g.patched:
                 rect = pygame.Rect(0, 0, 2 * r + 8, 2 * r + 8)
                 rect.center = p
-                pygame.draw.arc(surf, T.CYAN, rect, math.pi * 0.15, math.pi * 0.85, 2)
+                hidpi.arc(surf, T.CYAN, rect, math.pi * 0.15, math.pi * 0.85, 2)
             if u in g.decoys:
                 fx.diamond(surf, T.AMBER, p, r + 7, 2)
                 fx.blit_glow(surf, p, 26, T.AMBER, 0.45)
@@ -252,9 +253,9 @@ class Board:
 
         if hl:
             a = 0.5 + 0.5 * math.sin(t * 6)
-            pygame.draw.circle(surf, T.mix(T.WHITE, T.RED_SOFT, a), p, r + 5, 2)
+            hidpi.circle(surf, T.mix(T.WHITE, T.RED_SOFT, a), p, r + 5, 2)
         if hover:
-            pygame.draw.circle(surf, T.WHITE, p, r + 4, 1)
+            hidpi.circle(surf, T.WHITE, p, r + 4, 1)
 
         # label and (in Red's view) what Red believes the weakness is
         lab_col = T.MUTED if not held else T.RED_SOFT

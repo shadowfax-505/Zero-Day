@@ -7,22 +7,23 @@ import random
 import pygame
 
 from ui.neon import theme as T
+from ui import hidpi
 
 _glow_cache = {}
 
 
 def glow(radius, color, intensity=1.0):
     """A soft radial glow sprite, meant to be blitted with BLEND_RGB_ADD."""
-    key = (int(radius), color, round(intensity, 2))
+    key = (int(radius), color, round(intensity, 2), hidpi.K)
     s = _glow_cache.get(key)
     if s is None:
         r = max(2, int(radius))
-        s = pygame.Surface((r * 2, r * 2))
+        s = hidpi.Surface((r * 2, r * 2))
         s.fill((0, 0, 0))
         for i in range(r, 0, -1):
             t = i / r
             k = intensity * (1 - t) ** 2.2
-            pygame.draw.circle(s, T.scale(color, k), (r, r), i)
+            hidpi.circle(s, T.scale(color, k), (r, r), i)
         _glow_cache[key] = s
     return s
 
@@ -67,33 +68,33 @@ def dashed_line(surf, color, a, b, width=2, dash=8, gap=6, offset=0.0):
     while d < length:
         s0, s1 = max(0, d), min(length, d + dash)
         if s1 > s0:
-            pygame.draw.line(surf, color, (ax + ux * s0, ay + uy * s0), (ax + ux * s1, ay + uy * s1), width)
+            hidpi.line(surf, color, (ax + ux * s0, ay + uy * s0), (ax + ux * s1, ay + uy * s1), width)
         d += period
 
 
 def rounded_panel(surf, rect, fill=T.PANEL, border=T.PANEL_EDGE, radius=12, alpha=235):
-    s = pygame.Surface(rect.size, pygame.SRCALPHA)
-    pygame.draw.rect(s, (*fill, alpha), s.get_rect(), border_radius=radius)
-    pygame.draw.rect(s, (*border, 255), s.get_rect(), 1, border_radius=radius)
+    s = hidpi.Surface(rect.size, pygame.SRCALPHA)
+    hidpi.rect(s, (*fill, alpha), s.get_rect(), border_radius=radius)
+    hidpi.rect(s, (*border, 255), s.get_rect(), 1, border_radius=radius)
     surf.blit(s, rect.topleft)
 
 
 def bar(surf, rect, frac, color, bg=(22, 34, 62), radius=3):
-    pygame.draw.rect(surf, bg, rect, border_radius=radius)
+    hidpi.rect(surf, bg, rect, border_radius=radius)
     w = int(rect.w * max(0.0, min(1.0, frac)))
     if w > 0:
-        pygame.draw.rect(surf, color, pygame.Rect(rect.x, rect.y, w, rect.h), border_radius=radius)
+        hidpi.rect(surf, color, pygame.Rect(rect.x, rect.y, w, rect.h), border_radius=radius)
 
 
 def hexagon(surf, color, center, r, width=2, rot=0.0):
     pts = [(center[0] + r * math.cos(rot + i * math.pi / 3), center[1] + r * math.sin(rot + i * math.pi / 3))
            for i in range(6)]
-    pygame.draw.polygon(surf, color, pts, width)
+    hidpi.polygon(surf, color, pts, width)
 
 
 def diamond(surf, color, center, r, width=2):
     x, y = center
-    pygame.draw.polygon(surf, color, [(x, y - r), (x + r, y), (x, y + r), (x - r, y)], width)
+    hidpi.polygon(surf, color, [(x, y - r), (x + r, y), (x, y + r), (x - r, y)], width)
 
 
 # -- effects --------------------------------------------------------------------
@@ -128,9 +129,9 @@ class Ripple(Effect):
                 a0, a1 = i / n * 2 * math.pi, (i + 1) / n * 2 * math.pi
                 rect = pygame.Rect(0, 0, 2 * r, 2 * r)
                 rect.center = self.pos
-                pygame.draw.arc(surf, c, rect, a0, a1, self.width)
+                hidpi.arc(surf, c, rect, a0, a1, self.width)
         else:
-            pygame.draw.circle(surf, c, self.pos, int(r), self.width)
+            hidpi.circle(surf, c, self.pos, int(r), self.width)
 
 
 class Beam(Effect):
@@ -154,8 +155,8 @@ class Beam(Effect):
             pts.append((ax + (ex - ax) * t + rng.uniform(-jitter, jitter), ay + (ey - ay) * t + rng.uniform(-jitter, jitter)))
         pts.append((ex, ey))
         fade = 1 - max(0.0, (k - 0.5) * 2)
-        pygame.draw.lines(surf, T.scale(self.color, 0.5 * fade), False, pts, 6)
-        pygame.draw.lines(surf, T.scale(T.mix(self.color, T.WHITE, 0.5), fade), False, pts, 2)
+        hidpi.lines(surf, T.scale(self.color, 0.5 * fade), False, pts, 6)
+        hidpi.lines(surf, T.scale(T.mix(self.color, T.WHITE, 0.5), fade), False, pts, 2)
         blit_glow(surf, (int(ex), int(ey)), 26, self.color, 0.8 * fade)
 
 
@@ -181,7 +182,7 @@ class Burst(Effect):
         fade = 1 - self.k
         c = T.scale(self.color, fade)
         for x, y, _, _ in self.parts:
-            pygame.draw.circle(surf, c, (int(x), int(y)), 2)
+            hidpi.circle(surf, c, (int(x), int(y)), 2)
         if self.k < 0.35:
             blit_glow(surf, self.pos, int(30 + 50 * self.k), self.color, 1.2 * (1 - self.k / 0.35))
 
@@ -205,6 +206,6 @@ class Flash(Effect):
 
     def draw(self, surf):
         a = int(self.strength * (1 - self.k))
-        s = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        s = hidpi.Surface(surf.get_size(), pygame.SRCALPHA)
         s.fill((*self.color, a))
         surf.blit(s, (0, 0))

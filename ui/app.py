@@ -29,6 +29,7 @@ from ui.online import Lobby
 from ui import skins
 from ui.settings import Settings
 from ui.sound import Sound
+from ui import hidpi
 
 WEB = sys.platform == "emscripten"     # running in the browser (pygbag): no threads there
 SPEEDS = [0.5, 1, 2, 4]
@@ -65,6 +66,7 @@ class App:
         self.sk = _use_skin(self.settings["theme"])
         pygame.init()
         pygame.display.set_caption("Zero Day - Red AI vs Blue AI")
+        self.display = hidpi.Display("Zero Day - Red AI vs Blue AI")
         self.fullscreen = (not windowed) if windowed is not None else self.settings["fullscreen"]
         self.layout, self.size = None, (T.W, T.H)
         self._viewport_t = 0.0
@@ -115,12 +117,8 @@ class App:
         """Pick the logical screen size: 1600 x 900 on a computer, a phone-shaped one on a phone (ui/device.py)."""
         if (lay.name, (lay.w, lay.h)) == (self.layout, self.size):
             return
-        if pygame.display.get_surface() is not None and pygame.display.get_driver() in ("dummy", "offscreen"):
-            pygame.display.quit()        # SDL's software-only drivers crash if a SCALED window changes size
-            pygame.display.init()
         self.layout, self.size = lay.name, (lay.w, lay.h)
-        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE)
-        self.screen = pygame.display.set_mode(self.size, flags)
+        self.screen = self.display.open(self.size, self.fullscreen)       # sharp at any pixel density (ui/hidpi.py)
         device.refit_canvas()
         device.log(f"Zero Day layout {lay.name} {lay.w}x{lay.h}")
         self.pane_scroll = 0
@@ -141,7 +139,7 @@ class App:
     def _build_skin_surfaces(self):
         self.background = screens.make_background(self)
         if self.phone:
-            self.design = pygame.Surface((T.W, T.H))        # the online lobby is drawn here, then fitted
+            self.design = hidpi.Surface((T.W, T.H))        # the online lobby is drawn here, then fitted
             self.design_bg = self.background
             self.background = mobile.make_background(self)
         self._new_menu_board()
@@ -181,10 +179,16 @@ class App:
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         self.settings["fullscreen"] = self.fullscreen
-        try:
-            pygame.display.toggle_fullscreen()
-        except pygame.error:
-            pass
+        self.display.toggle_fullscreen(self.fullscreen)
+
+    def _check_display(self):
+        """The window was resized, went fullscreen or moved to a screen with another pixel density:
+        draw at the new size, and redraw anything that was drawn ahead of time."""
+        if self.display.refit():
+            self.screen = self.display.screen
+            self._build_skin_surfaces()
+        else:
+            self.screen = self.display.screen
 
     def start_match(self, mode, same_map=False):
         self._leave_online()
@@ -576,8 +580,8 @@ class App:
                     status = f"Waiting for {o.remote_name} to accept a rematch on {self.rematch_text(o.my_offer)}..."
             box = pygame.Rect(0, 0, 760, 74 if status else 48)
             box.center = (W // 2, H - 70 - (13 if status else 0))
-            pygame.draw.rect(s, T.PAPER, box)
-            pygame.draw.rect(s, T.RED if g.winner == "red" else T.BLUE, box, 2)
+            hidpi.rect(s, T.PAPER, box)
+            hidpi.rect(s, T.RED if g.winner == "red" else T.BLUE, box, 2)
             top = pygame.Rect(box.x, box.y, box.w, 48)
             fx.spaced(s, "YOU WIN" if won else "YOU LOSE", (box.x + 20, top.centery), 20,
                       T.RED if g.winner == "red" else T.BLUE, "bold", 2, anchor="midleft")
@@ -591,8 +595,8 @@ class App:
                 msg += "   Y  accept   X  no thanks"
             card = pygame.Rect(0, 0, min(r.w - 16, 12 + 8 * len(msg)), 34)
             card.midtop = (r.centerx, r.y + 58)
-            pygame.draw.rect(s, T.PAPER, card)
-            pygame.draw.rect(s, T.INK, card, 2)
+            hidpi.rect(s, T.PAPER, card)
+            hidpi.rect(s, T.INK, card, 2)
             fx.text(s, msg, card.center, 13, T.INK, "semibold", mono=True, anchor="center")
         if self.chat_text is not None:
             if self.phone:
@@ -600,8 +604,8 @@ class App:
                 box = pygame.Rect(br.x + 4, br.bottom - 48, br.w - 8, 40)
             else:
                 box = pygame.Rect(T.SIDE_W + 16, T.H - T.BOTTOM_H - 58, T.W - 2 * T.SIDE_W - 32, 40)
-            pygame.draw.rect(s, T.PAPER, box)
-            pygame.draw.rect(s, T.INK, box, 2)
+            hidpi.rect(s, T.PAPER, box)
+            hidpi.rect(s, T.INK, box, 2)
             caret = "_" if int(self.t * 2) % 2 == 0 else " "
             fx.spaced(s, "SAY", (box.x + 14, box.centery + 1), 16, T.INK_2, "bold", 2, anchor="midleft")
             fx.text(s, self.chat_text + caret, (box.x + 60, box.centery), 16, T.INK, "regular", anchor="midleft")
@@ -610,9 +614,9 @@ class App:
         if self.online_note:
             card = pygame.Rect(0, 0, min(640, W - 24), 120)
             card.center = (W // 2, (self.board.rect.y if self.phone else T.TOP_H) + 90)
-            pygame.draw.rect(s, T.PAPER, card)
-            pygame.draw.rect(s, T.INK, card, 2)
-            pygame.draw.rect(s, T.RED, (card.x, card.y, card.w, 8))
+            hidpi.rect(s, T.PAPER, card)
+            hidpi.rect(s, T.INK, card, 2)
+            hidpi.rect(s, T.RED, (card.x, card.y, card.w, 8))
             fx.spaced(s, "CONNECTION LOST", (card.x + 28, card.y + 26), 22, T.RED, "bold", 2)
             fx.text(s, self.online_note, (card.x + 28, card.y + 60), 16, T.INK, "regular")
             fx.text(s, "MENU, then Main menu" if self.phone else "M  back to the menu", (card.x + 28, card.y + 88), 13, T.INK_2, "regular", mono=True)
@@ -647,9 +651,9 @@ class App:
     def _draw_red_bar(self, s):
         r = self._red_bar_rect()
         cut = self._red_cut_off()
-        hot = cut or r.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(s, T.RED if hot else T.PAPER, r)
-        pygame.draw.rect(s, T.RED, r, 2)
+        hot = cut or r.collidepoint(hidpi.mouse_pos())
+        hidpi.rect(s, T.RED if hot else T.PAPER, r)
+        hidpi.rect(s, T.RED, r, 2)
         col = T.PAPER if hot else T.RED
         label = "SCOUT AND PASS" if cut else "SCOUT"
         fx.text(s, label, (r.centerx, r.centery - 6), 13, col, "bold", anchor="center")
@@ -730,15 +734,15 @@ class App:
 
     def _draw_blue_bar(self, s):
         ap = self._human_blue_ap()
-        mouse = pygame.mouse.get_pos()
+        mouse = hidpi.mouse_pos()
         keys = {"monitor": "Q", "patch": "W", "decoy": "E", "isolate": "A", "restore": "D", "end": "ENTER"}
         stuck = not self._blue_can_do_anything()
         for name, r in self._blue_bar_rects():
             if name == "end":
                 hot = stuck or ap == 0
                 fill = T.BLUE if hot else T.PAPER
-                pygame.draw.rect(s, fill, r)
-                pygame.draw.rect(s, T.BLUE, r, 2)
+                hidpi.rect(s, fill, r)
+                hidpi.rect(s, T.BLUE, r, 2)
                 col = T.PAPER if hot else T.BLUE
                 fx.text(s, f"END TURN  {ap} AP", (r.centerx, r.centery - 6), 13, col, "bold", anchor="center")
                 fx.text(s, keys[name], (r.centerx, r.centery + 9), 10, col, "medium", mono=True, anchor="center")
@@ -746,8 +750,8 @@ class App:
             cost = C.COST[name]
             sel = name == self.human_tool
             afford = cost <= ap
-            pygame.draw.rect(s, T.BLUE if sel else T.PAPER, r)
-            pygame.draw.rect(s, T.BLUE if (sel or r.collidepoint(mouse)) else T.RULE, r, 1)
+            hidpi.rect(s, T.BLUE if sel else T.PAPER, r)
+            hidpi.rect(s, T.BLUE if (sel or r.collidepoint(mouse)) else T.RULE, r, 1)
             col = T.PAPER if sel else (T.INK if afford else T.INK_3)
             fx.text(s, name.title(), (r.x + 10, r.centery - 6), 13, col, "semibold", anchor="midleft")
             fx.text(s, f"{keys[name]}  ·  {cost} AP", (r.x + 10, r.centery + 9), 10, col, "medium", mono=True,
@@ -798,7 +802,7 @@ class App:
 
     def _update_cursor(self):
         """Hand cursor over anything clickable, so it is obvious what can be clicked."""
-        pos = pygame.mouse.get_pos()
+        pos = hidpi.mouse_pos()
         want = self.state in ("match", "result") and not self.overlay and (
             self._click_target(pos) is not None or any(r.collidepoint(pos) for _, r in self._chips))
         if want != getattr(self, "_hand", False):
@@ -1119,7 +1123,7 @@ class App:
     def _screenshot(self):
         os.makedirs("screenshots", exist_ok=True)
         path = os.path.join("screenshots", f"zero-day-{int(time.time())}.png")
-        pygame.image.save(self.screen, path)
+        hidpi.save(self.screen, path)
 
     # -- update -----------------------------------------------------------------------------
     def update(self, dt):
@@ -1202,7 +1206,7 @@ class App:
                 O.draw_help(self, s)
         if self.settings["show_fps"]:
             O.draw_fps(self, s)
-        pygame.display.flip()
+        self.display.present()
 
     def _draw_phone(self, s):
         """The same screens, laid out for a phone (ui/mobile.py)."""
@@ -1238,7 +1242,7 @@ class App:
         self.sk.panels.SWITCH_HINT = "Click here or press V to switch view"
         m, g = self.match, self.match.game
         hl, hover = (), None
-        mouse = pygame.mouse.get_pos()
+        mouse = hidpi.mouse_pos()
         monitored = set(g.monitored)
         if self.phase == "reveal" and self.pending_blue:
             monitored |= {t for k, t in self.pending_blue if k == "monitor"}
@@ -1388,15 +1392,16 @@ class App:
         while running:
             dt = self.clock.tick(60) / 1000.0
             for ev in pygame.event.get():
-                if not self.handle(ev):
+                if not self.handle(self.display.map_event(ev)):
                     running = False
             if self.record:
                 dt = 1 / 30           # fixed step so the recording plays back at real speed
             self.update(dt)
+            self._check_display()
             self.draw()
             self._update_cursor()
             if self.record:
-                pygame.image.save(self.screen, os.path.join(self.record, f"frame_{self.frame:06d}.png"))
+                hidpi.save(self.screen, os.path.join(self.record, f"frame_{self.frame:06d}.png"))
                 self.frame += 1
             await asyncio.sleep(0)
         self.settings.save()

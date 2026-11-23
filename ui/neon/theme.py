@@ -5,6 +5,8 @@ import os
 
 import pygame
 
+from ui import hidpi
+
 W, H = 1600, 900
 TOP_H = 64
 SIDE_W = 340
@@ -38,6 +40,13 @@ ASSETS = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "fonts")
 _fonts = {}
 
 
+def _load(path, px, weight):
+    try:
+        return pygame.font.Font(path, px)
+    except (FileNotFoundError, OSError):
+        return pygame.font.SysFont("dejavusans", px, bold=weight in ("bold", "black"))
+
+
 def font(size, weight="regular", mono=False):
     key = (size, weight, mono)
     if key not in _fonts:
@@ -47,10 +56,7 @@ def font(size, weight="regular", mono=False):
             name = {"regular": "Inter-Regular.otf", "medium": "Inter-Medium.otf", "semibold": "Inter-SemiBold.otf",
                     "bold": "Inter-Bold.otf", "black": "InterDisplay-Black.otf"}[weight]
         path = os.path.join(ASSETS, name)
-        try:
-            _fonts[key] = pygame.font.Font(path, size)
-        except (FileNotFoundError, OSError):
-            _fonts[key] = pygame.font.SysFont("dejavusans", size, bold=weight in ("bold", "black"))
+        _fonts[key] = hidpi.Font(lambda px, path=path, weight=weight: _load(path, px, weight), size)
     return _fonts[key]
 
 

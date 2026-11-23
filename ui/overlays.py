@@ -6,6 +6,7 @@ import pygame
 
 from engine import config as C
 from ui import settings as S
+from ui import hidpi
 
 KIND_NAMES = {"gateway": "Gateway", "database": "Database", "bridge": "Bridge", "server": "Server",
               "workstation": "Workstation", "fileserver": "File server", "storage": "Storage"}
@@ -13,18 +14,18 @@ KIND_NAMES = {"gateway": "Gateway", "database": "Database", "bridge": "Bridge", 
 
 def _veil(app, s, a=200):
     T = app.sk.T
-    v = pygame.Surface(s.get_size(), pygame.SRCALPHA)
+    v = hidpi.Surface(s.get_size(), pygame.SRCALPHA)
     v.fill((*T.BG, a))
     s.blit(v, (0, 0))
 
 
 def _card(app, s, rect, accent=None):
     T = app.sk.T
-    pygame.draw.rect(s, T.PANEL, rect, border_radius=0 if T.NAME == "paper" else 14)
-    pygame.draw.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, rect, 2 if T.NAME == "paper" else 1,
+    hidpi.rect(s, T.PANEL, rect, border_radius=0 if T.NAME == "paper" else 14)
+    hidpi.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, rect, 2 if T.NAME == "paper" else 1,
                      border_radius=0 if T.NAME == "paper" else 14)
     if accent:
-        pygame.draw.rect(s, accent, (rect.x, rect.y, rect.w, 6))
+        hidpi.rect(s, accent, (rect.x, rect.y, rect.w, 6))
 
 
 # -- settings screen -------------------------------------------------------------
@@ -123,13 +124,13 @@ def draw_settings(app, s):
     sel = settings_rows()[app.settings_sel]
     for title, x, y, w in sections:
         fx.text(s, title.upper(), (x, y + 10), 13, T.MUTED, "bold")
-        pygame.draw.line(s, T.PANEL_EDGE, (x + 100, y + 19), (x + w, y + 19))
+        hidpi.line(s, T.PANEL_EDGE, (x + 100, y + 19), (x + w, y + 19))
     for row in S.OPTIONS:
         key, label = row[0], row[1]
         r = rects[key]
         active = key == sel
         if active:
-            pygame.draw.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
+            hidpi.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
         col = (T.PANEL if T.NAME == "paper" else T.STRONG) if active else T.TEXT
         fx.text(s, label, (r.x + 12, r.centery), 16 if not compact else 15, col,
                 "semibold" if active else "medium", anchor="midleft")
@@ -139,7 +140,7 @@ def draw_settings(app, s):
         fx.text(s, ">", (r.right - 26, r.centery), 16, col, "bold", mono=True, anchor="midleft")
     b = rects["back"]
     active = sel == "back" or compact
-    pygame.draw.rect(s, T.STRONG if active else T.PANEL_EDGE, b, 0 if active else 1)
+    hidpi.rect(s, T.STRONG if active else T.PANEL_EDGE, b, 0 if active else 1)
     fx.text(s, "BACK", b.center, 15, (T.PANEL if T.NAME == "paper" else T.BG) if active else T.TEXT, "bold",
             anchor="center")
     note = next((r[4] for r in S.OPTIONS if r[0] == sel), "Save and go back.")
@@ -188,7 +189,7 @@ def draw_pause(app, s):
     for i, ((label, _), r) in enumerate(zip(PAUSE_ITEMS, rects)):
         active = i == app.pause_sel
         if active:
-            pygame.draw.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
+            hidpi.rect(s, T.STRONG if T.NAME == "paper" else T.PANEL_EDGE, r)
         col = (T.PANEL if T.NAME == "paper" else T.STRONG) if active else T.TEXT
         fx.text(s, label, (r.x + 14, r.centery), 18, col, "semibold", anchor="midleft")
     fx.text(s, "tap Resume to go back" if _compact(app) else "Esc resume", (card.centerx, card.bottom - 14), 12, T.MUTED, "medium", mono=True, anchor="midbottom")

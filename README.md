@@ -122,6 +122,15 @@ name or game code brings up the phone's own keyboard. Turning the phone switches
 On a computer, every key in the CONTROLS legend under the map can also be clicked or tapped. To try the
 phone layouts on a computer: `ZERO_DAY_VIEWPORT=390x844 python main.py` (or `844x390` for landscape).
 
+### Any screen size
+
+The window opens at the biggest size of the game's shape that fits the screen, and can be resized,
+maximised or made fullscreen (`F11`) at any time. The game is laid out at 1600 x 900, but it is drawn at the
+window's real pixel size (`ui/hidpi.py`), so text and lines stay sharp on Retina and 4K screens as well as
+on 1080p and small laptop screens. If the shape doesn't match, the rest of the window is filled with the
+background colour. `ZERO_DAY_HIDPI=0 python main.py` goes back to a plain window that is stretched to fit.
+The browser version is unchanged.
+
 ### Themes and settings
 
 There are two themes. **Paper** (the default) draws the network like a printed operations map. **Dark** is
@@ -497,7 +506,7 @@ net/             online play: TCP link, LAN discovery, relay (WebSocket) link, l
 server/          relay server for online play through the internet and the browser (Render / Fly.io)
 tools/           browser build (pygbag), desktop build (PyInstaller), browser smoke test
 experiments/     headless batch runner, charts, results
-tests/           engine, online lockstep and resync, relay, phone layout, cut-off and AI-part checks
+tests/           engine, online lockstep and resync, relay, phone layout, sharp drawing, cut-off and AI-part checks
 .github/         workflows: browser build + GitHub Pages, desktop builds on v* tags
 ```
 

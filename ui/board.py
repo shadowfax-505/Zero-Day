@@ -10,6 +10,7 @@ from engine import config as C
 from engine.mapgen import ZONE_X
 from ui import fx
 from ui import theme as T
+from ui import hidpi
 
 VIEWS = ["red", "full", "blue"]
 VIEW_NAMES = {"red": "RED'S VIEW", "full": "FULL VIEW", "blue": "BLUE'S VIEW"}
@@ -82,20 +83,20 @@ class Board:
             opened = e in g.open_gates
             held_both = show_red and u in g.red_held and v in g.red_held
             if held_both or (gate and opened and show_red):
-                pygame.draw.line(surf, T.RED, a, b, 3)
+                hidpi.line(surf, T.RED, a, b, 3)
             elif gate:
                 fx.dashed_line(surf, T.INK_2, a, b, 2, 7, 5)
             else:
-                pygame.draw.line(surf, T.EDGE, a, b, 1)
+                hidpi.line(surf, T.EDGE, a, b, 1)
             if gate:
                 m = ((a[0] + b[0]) // 2, (a[1] + b[1]) // 2)
                 col = T.RED if opened and show_red else T.INK
                 r = pygame.Rect(0, 0, 11, 11)
                 r.center = m
-                pygame.draw.rect(surf, T.PAPER, r)
-                pygame.draw.rect(surf, col, r, 2)
+                hidpi.rect(surf, T.PAPER, r)
+                hidpi.rect(surf, col, r, 2)
                 if not (opened and show_red):
-                    pygame.draw.rect(surf, col, r.inflate(-6, -6))
+                    hidpi.rect(surf, col, r.inflate(-6, -6))
 
         if view == "red":
             self._draw_fog(surf, visible)
@@ -122,34 +123,34 @@ class Board:
                 r = self.radius(u)
                 c = (p[0] + r + 5, p[1] - r - 5)
                 col = T.ALERT if (real or view == "blue") else T.INK_3
-                pygame.draw.circle(surf, T.PAPER, c, 9)
-                pygame.draw.circle(surf, col, c, 8)
+                hidpi.circle(surf, T.PAPER, c, 9)
+                hidpi.circle(surf, col, c, 8)
                 fx.text(surf, "!", (c[0] + 1, c[1]), 13, T.PAPER, "bold", anchor="center")
 
         # Red's marker: a pin above its node
         if show_red and g.winner != "blue":
             p = self.pts[g.red_pos]
             r = self.radius(g.red_pos)
-            pygame.draw.circle(surf, T.RED, p, r + 6, 2)
+            hidpi.circle(surf, T.RED, p, r + 6, 2)
             bob = 2 * math.sin(t * 3)
             x, y = p[0], p[1] - r - 12 + bob
-            pygame.draw.polygon(surf, T.RED, [(x - 8, y - 12), (x + 8, y - 12), (x, y)])
-            pygame.draw.polygon(surf, T.PAPER, [(x - 8, y - 12), (x + 8, y - 12), (x, y)], 1)
+            hidpi.polygon(surf, T.RED, [(x - 8, y - 12), (x + 8, y - 12), (x, y)])
+            hidpi.polygon(surf, T.PAPER, [(x - 8, y - 12), (x + 8, y - 12), (x, y)], 1)
 
     def _draw_plate(self, surf):
         """The map sheet: faint grid with a frame and corner ticks."""
         if getattr(self, "_plate", None) is None:
             r = self.rect
-            plate = pygame.Surface(r.size)
+            plate = hidpi.Surface(r.size)
             plate.fill(T.PAPER)
             for x in range(0, r.w, 32):
-                pygame.draw.line(plate, T.GRID, (x, 0), (x, r.h))
+                hidpi.line(plate, T.GRID, (x, 0), (x, r.h))
             for y in range(0, r.h, 32):
-                pygame.draw.line(plate, T.GRID, (0, y), (r.w, y))
-            pygame.draw.rect(plate, T.INK_3, plate.get_rect(), 1)
+                hidpi.line(plate, T.GRID, (0, y), (r.w, y))
+            hidpi.rect(plate, T.INK_3, plate.get_rect(), 1)
             for cx, cy, dx, dy in ((0, 0, 1, 1), (r.w - 1, 0, -1, 1), (0, r.h - 1, 1, -1), (r.w - 1, r.h - 1, -1, -1)):
-                pygame.draw.line(plate, T.INK, (cx, cy), (cx + 14 * dx, cy), 2)
-                pygame.draw.line(plate, T.INK, (cx, cy), (cx, cy + 14 * dy), 2)
+                hidpi.line(plate, T.INK, (cx, cy), (cx + 14 * dx, cy), 2)
+                hidpi.line(plate, T.INK, (cx, cy), (cx, cy + 14 * dy), 2)
             self._plate = plate
         surf.blit(self._plate, self.rect.topleft)
 
@@ -165,13 +166,13 @@ class Board:
         for z, r in enumerate(self.zone_rects):
             watched = z in mon
             if watched:
-                s = pygame.Surface(r.size, pygame.SRCALPHA)
+                s = hidpi.Surface(r.size, pygame.SRCALPHA)
                 s.fill((*T.BLUE, 22))
                 surf.blit(s, r.topleft)
-                pygame.draw.rect(surf, T.BLUE, r, 2)
+                hidpi.rect(surf, T.BLUE, r, 2)
             else:
-                pygame.draw.rect(surf, T.PAPER_2, r)
-                pygame.draw.rect(surf, T.RULE, r, 1)
+                hidpi.rect(surf, T.PAPER_2, r)
+                hidpi.rect(surf, T.RULE, r, 1)
             fx.text(surf, f"{z + 1:02d}", (r.x + 12, r.y + 7), 15, T.INK_3, "semibold", display=True)
             fx.spaced(surf, C.ZONE_NAMES[z], (r.x + 36, r.y + 7), 15, T.INK_2, "semibold", 2)
             if watched:
@@ -180,12 +181,12 @@ class Board:
     def _draw_belief(self, surf, blue_dbg, t):
         b = blue_dbg["belief"]
         ox, oy = self.rect.topleft
-        layer = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+        layer = hidpi.Surface(self.rect.size, pygame.SRCALPHA)
         for u in range(self.net.n):
             if b[u] > 0.01:
                 k = min(1.0, b[u] * 1.8)
                 p = self.pts[u]
-                pygame.draw.circle(layer, (*T.BLUE, int(36 + 80 * k)), (p[0] - ox, p[1] - oy), int(16 + 30 * k))
+                hidpi.circle(layer, (*T.BLUE, int(36 + 80 * k)), (p[0] - ox, p[1] - oy), int(16 + 30 * k))
         surf.blit(layer, (ox, oy))
         parts = blue_dbg.get("particles")
         if parts is not None:
@@ -202,16 +203,16 @@ class Board:
         key = frozenset(visible)
         if self._fog_key != key:
             self._fog_key = key
-            fog = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+            fog = hidpi.Surface(self.rect.size, pygame.SRCALPHA)
             fog.fill((*T.PAPER_3, 250))
             fx.hatch(fog, fog.get_rect(), (*T.RULE, 255), 9, 1)
             ox, oy = self.rect.topleft
             for u in visible:
                 p = self.pts[u]
-                pygame.draw.circle(fog, (*T.INK_3, 255), (p[0] - ox, p[1] - oy), FOG_R + 2)
+                hidpi.circle(fog, (*T.INK_3, 255), (p[0] - ox, p[1] - oy), FOG_R + 2)
             for u in visible:
                 p = self.pts[u]
-                pygame.draw.circle(fog, (0, 0, 0, 0), (p[0] - ox, p[1] - oy), FOG_R)
+                hidpi.circle(fog, (0, 0, 0, 0), (p[0] - ox, p[1] - oy), FOG_R)
             self._fog = fog
         surf.blit(self._fog, self.rect.topleft)
         fx.tag(surf, "UNEXPLORED", (self.rect.right - 60, self.rect.bottom - 18), T.INK_2, 13)
@@ -238,55 +239,55 @@ class Board:
         if kind == "database":
             box = pygame.Rect(0, 0, 2 * r, 2 * r)
             box.center = p
-            pygame.draw.rect(surf, T.PAPER, box.inflate(10, 10))
-            pygame.draw.rect(surf, T.OCHRE, box.inflate(10, 10), 1)
-            pygame.draw.rect(surf, T.OCHRE if not held else T.RED, box)
+            hidpi.rect(surf, T.PAPER, box.inflate(10, 10))
+            hidpi.rect(surf, T.OCHRE, box.inflate(10, 10), 1)
+            hidpi.rect(surf, T.OCHRE if not held else T.RED, box)
             fx.text(surf, "DB", (x, y + 1), 17, T.PAPER, "bold", display=True, anchor="center")
         elif kind == "gateway":
             box = pygame.Rect(0, 0, 2 * r, 2 * r)
             box.center = p
-            pygame.draw.rect(surf, T.RED if held else T.INK, box)
+            hidpi.rect(surf, T.RED if held else T.INK, box)
             fx.text(surf, "GW", (x, y + 1), 15, T.PAPER, "bold", display=True, anchor="center")
         elif kind == "workstation":
-            pygame.draw.circle(surf, fill, p, r)
-            pygame.draw.circle(surf, ink, p, r, 2)
+            hidpi.circle(surf, fill, p, r)
+            hidpi.circle(surf, ink, p, r, 2)
         elif kind == "bridge":
-            pygame.draw.circle(surf, fill, p, r)
-            pygame.draw.circle(surf, ink, p, r, 2)
-            pygame.draw.circle(surf, ink if not held else T.PAPER, p, 3)
+            hidpi.circle(surf, fill, p, r)
+            hidpi.circle(surf, ink, p, r, 2)
+            hidpi.circle(surf, ink if not held else T.PAPER, p, 3)
         else:  # server, fileserver, storage: squares
             box = pygame.Rect(0, 0, 2 * r, 2 * r)
             box.center = p
-            pygame.draw.rect(surf, fill, box)
-            pygame.draw.rect(surf, ink, box, 2)
+            hidpi.rect(surf, fill, box)
+            hidpi.rect(surf, ink, box, 2)
             mark = ink if not held else T.PAPER
             if kind == "storage":
-                pygame.draw.line(surf, mark, (x - r + 3, y), (x + r - 3, y), 2)
+                hidpi.line(surf, mark, (x - r + 3, y), (x + r - 3, y), 2)
             elif kind == "fileserver":
-                pygame.draw.line(surf, mark, (x - r + 3, y - 2), (x + r - 3, y - 2), 1)
-                pygame.draw.line(surf, mark, (x - r + 3, y + 2), (x + r - 3, y + 2), 1)
+                hidpi.line(surf, mark, (x - r + 3, y - 2), (x + r - 3, y - 2), 1)
+                hidpi.line(surf, mark, (x - r + 3, y + 2), (x + r - 3, y + 2), 1)
 
         # patched: a small blue bar under the node
         if show_blue and u in g.patched:
-            pygame.draw.line(surf, T.BLUE, (x - r, y + r + 4), (x + r, y + r + 4), 3)
+            hidpi.line(surf, T.BLUE, (x - r, y + r + 4), (x + r, y + r + 4), 3)
 
         # isolated: blue square bracket and a strike, with rounds left
         if isolated:
             col = T.BLUE if view != "red" else T.INK_2
             box = pygame.Rect(0, 0, 2 * r + 14, 2 * r + 14)
             box.center = p
-            pygame.draw.rect(surf, col, box, 2)
-            pygame.draw.line(surf, col, box.bottomleft, box.topright, 2)
+            hidpi.rect(surf, col, box, 2)
+            hidpi.line(surf, col, box.bottomleft, box.topright, 2)
             badge = pygame.Rect(0, 0, 15, 15)
             badge.center = box.topright
-            pygame.draw.rect(surf, col, badge)
+            hidpi.rect(surf, col, badge)
             fx.text(surf, str(g.isolated[u]), badge.center, 11, T.PAPER, "semibold", mono=True, anchor="center")
 
         if hl:
             a = 0.5 + 0.5 * math.sin(t * 5)
             fx.dashed_circle(surf, T.mix(T.RED, T.INK, a * 0.4), p, r + 8, 2, 14, rot=t)
         if hover:
-            pygame.draw.circle(surf, T.INK, p, r + 11, 1)
+            hidpi.circle(surf, T.INK, p, r + 11, 1)
 
         # label and (in Red's view) what Red believes the weakness is
         if kind not in ("database", "gateway") and getattr(self, "show_labels", True):

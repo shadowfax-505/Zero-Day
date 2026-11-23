@@ -9,6 +9,8 @@ import os
 
 import pygame
 
+from ui import hidpi
+
 W, H = 1600, 900
 TOP_H = 64
 SIDE_W = 340
@@ -60,16 +62,20 @@ _DISPLAY = {"regular": "BarlowCondensed-Medium.ttf", "medium": "BarlowCondensed-
             "black": "BarlowCondensed-Bold.ttf"}
 
 
+def _load(path, px, weight):
+    try:
+        return pygame.font.Font(path, px)
+    except (FileNotFoundError, OSError):
+        return pygame.font.SysFont("dejavusans", px, bold=weight in ("bold", "black"))
+
+
 def font(size, weight="regular", mono=False, display=False):
     """IBM Plex Sans for text, Plex Mono for numbers, Barlow Condensed for headings."""
     key = (size, weight, mono, display)
     if key not in _fonts:
         table = _DISPLAY if display else _MONO if mono else _SANS
         path = os.path.join(ASSETS, table[weight])
-        try:
-            _fonts[key] = pygame.font.Font(path, size)
-        except (FileNotFoundError, OSError):
-            _fonts[key] = pygame.font.SysFont("dejavusans", size, bold=weight in ("bold", "black"))
+        _fonts[key] = hidpi.Font(lambda px, path=path, weight=weight: _load(path, px, weight), size)
     return _fonts[key]
 
 

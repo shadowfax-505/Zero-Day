@@ -8,6 +8,7 @@ from engine import config as C
 from ui.neon import fx
 from ui.neon import theme as T
 from ui.neon.board import VIEW_NAMES
+from ui import hidpi
 
 ACTION_WORD = {"scout": "Scout", "capture": "Capture", "unlock": "Unlock", "advance": "Advance", "claim": "Claim",
                "monitor": "Monitor", "patch": "Patch", "decoy": "Decoy", "isolate": "Isolate", "restore": "Restore"}
@@ -43,8 +44,8 @@ def view_rects():
 
 def draw_top(surf, match, view, speed, paused, mode_label, t):
     g, net = match.game, match.net
-    pygame.draw.rect(surf, (7, 12, 28), (0, 0, T.W, T.TOP_H))
-    pygame.draw.line(surf, T.PANEL_EDGE, (0, T.TOP_H), (T.W, T.TOP_H))
+    hidpi.rect(surf, (7, 12, 28), (0, 0, T.W, T.TOP_H))
+    hidpi.line(surf, T.PANEL_EDGE, (0, T.TOP_H), (T.W, T.TOP_H))
     fx.blit_glow(surf, (70, 32), 50, T.RED, 0.35)
     fx.text(surf, "ZERO", (24, 32), 26, T.WHITE, "black", anchor="midleft")
     fx.text(surf, "DAY", (100, 32), 26, T.RED, "black", anchor="midleft")
@@ -66,10 +67,10 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
         active = v == view
         col = {"red": T.RED, "blue": T.BLUE, "full": T.TEXT}[v]
         if active:
-            pygame.draw.rect(surf, T.scale(col, 0.25), r, border_radius=14)
-            pygame.draw.rect(surf, col, r, 1, border_radius=14)
+            hidpi.rect(surf, T.scale(col, 0.25), r, border_radius=14)
+            hidpi.rect(surf, col, r, 1, border_radius=14)
         else:
-            pygame.draw.rect(surf, T.PANEL_EDGE, r, 1, border_radius=14)
+            hidpi.rect(surf, T.PANEL_EDGE, r, 1, border_radius=14)
         fx.text(surf, name, r.center, 11, col if active else T.MUTED, "bold", anchor="center")
     x = rects["red"].x - 8
     state = "PAUSED" if paused else f"{speed:g}x"
@@ -77,7 +78,7 @@ def draw_top(surf, match, view, speed, paused, mode_label, t):
 
 
 def _header(surf, rect, title, sub, color):
-    pygame.draw.rect(surf, color, (rect.x, rect.y + 16, 4, 34), border_radius=2)
+    hidpi.rect(surf, color, (rect.x, rect.y + 16, 4, 34), border_radius=2)
     fx.spaced(surf, title, (rect.x + 18, rect.y + 14), 12, color, "bold", 3)
     fx.text(surf, sub, (rect.x + 18, rect.y + 32), 13, T.MUTED, "medium")
 
@@ -188,7 +189,7 @@ def draw_red_panel(surf, rect, match, view, human=False, human_help=None, subtit
                 y += 24
             r = pygame.Rect(cx, y, wlab, 20)
             col = T.GOLD if lab == "DB" else (T.MUTED if lab == "fog..." else T.RED_SOFT)
-            pygame.draw.rect(surf, T.scale(col, 0.18), r, border_radius=10)
+            hidpi.rect(surf, T.scale(col, 0.18), r, border_radius=10)
             fx.text(surf, lab, r.center, 11, col, "semibold", anchor="center")
             cx += wlab + 6
         y += 30
@@ -243,7 +244,7 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
     fx.bar(surf, gr, mt / 100, T.mix(T.GREEN, T.RED, mt / 100))
     for thr in (match.blue.weights["watch"], match.blue.weights["act"]):
         tx = gr.x + int(gr.w * thr / 100)
-        pygame.draw.line(surf, T.TEXT, (tx, gr.y - 3), (tx, gr.bottom + 3), 1)
+        hidpi.line(surf, T.TEXT, (tx, gr.y - 3), (tx, gr.bottom + 3), 1)
     y += 40
     for u, sc, level in (d.get("threat_top") or [])[:3]:
         fx.text(surf, net.label[u], (x, y), 12, T.TEXT, "medium")
@@ -260,7 +261,7 @@ def draw_blue_panel(surf, rect, match, view, human=False, human_help=None, subti
         cost = C.action_cost(a[0], a[1], net.gateway)
         fx.text(surf, blue_act_text(net, a), (x, y), 14, T.WHITE, "semibold")
         for i in range(cost):
-            pygame.draw.circle(surf, T.BLUE, (x + w - i * 12, y + 9), 4)
+            hidpi.circle(surf, T.BLUE, (x + w - i * 12, y + 9), 4)
         y += 22
     if not d.get("actions"):
         fx.text(surf, "Hold (no action)", (x, y), 13, T.DIM, "medium")
@@ -287,8 +288,8 @@ def draw_bottom(surf, log_lines, controls, t):
     """Returns [(keycap, rect)] so the key chips can be clicked or tapped too."""
     chips = []
     r = pygame.Rect(0, T.H - T.BOTTOM_H, T.W, T.BOTTOM_H)
-    pygame.draw.rect(surf, (7, 12, 28), r)
-    pygame.draw.line(surf, T.PANEL_EDGE, r.topleft, r.topright)
+    hidpi.rect(surf, (7, 12, 28), r)
+    hidpi.line(surf, T.PANEL_EDGE, r.topleft, r.topright)
     fx.spaced(surf, "MOVE LOG", (24, r.y + 14), 10, T.MUTED, "bold", 2)
     y = r.y + 34
     for rnd, col, s in log_lines[-5:]:
@@ -303,8 +304,8 @@ def draw_bottom(surf, log_lines, controls, t):
         lw = T.font(12, "medium").size(label)[0]
         kr = pygame.Rect(x - lw - kw - 8, y, kw, 22)
         chips.append((keycap, pygame.Rect(kr.x - 4, kr.y - 2, x - kr.x + 8, 26)))
-        pygame.draw.rect(surf, (20, 32, 60), kr, border_radius=5)
-        pygame.draw.rect(surf, T.PANEL_EDGE, kr, 1, border_radius=5)
+        hidpi.rect(surf, (20, 32, 60), kr, border_radius=5)
+        hidpi.rect(surf, T.PANEL_EDGE, kr, 1, border_radius=5)
         fx.text(surf, keycap, kr.center, 11, T.TEXT, "bold", mono=True, anchor="center")
         fx.text(surf, label, (x, y + 11), 12, T.MUTED, "medium", anchor="midright")
         y += 26
